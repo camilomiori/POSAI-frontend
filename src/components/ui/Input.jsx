@@ -1,0 +1,58 @@
+// components/ui/Input.jsx
+import React from 'react';
+import { cn } from '../../utils/helpers';
+
+const Input = React.forwardRef(({ 
+  className, 
+  type = "text", 
+  error = false,
+  icon,
+  suffix,
+  ...props 
+}, ref) => {
+  const baseClasses = cn(
+    "flex h-10 w-full rounded-2xl border bg-white/80 backdrop-blur-sm px-3 py-2 text-sm ring-offset-white file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-neutral-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:bg-neutral-900/80 dark:ring-offset-neutral-950 dark:placeholder:text-neutral-400",
+    error 
+      ? "border-red-300 focus-visible:ring-red-500 dark:border-red-700" 
+      : "border-neutral-200 dark:border-neutral-700",
+    icon && "pl-10",
+    suffix && "pr-10",
+    className
+  );
+
+  if (icon || suffix) {
+    return (
+      <div className="relative">
+        {icon && (
+          <div className="absolute left-3 top-1/2 transform -translate-y-1/2 text-neutral-400">
+            {icon}
+          </div>
+        )}
+        <input
+          type={type}
+          className={baseClasses}
+          ref={ref}
+          {...props}
+        />
+        {suffix && (
+          <div className="absolute right-3 top-1/2 transform -translate-y-1/2 text-neutral-400">
+            {suffix}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <input
+      type={type}
+      className={baseClasses}
+      ref={ref}
+      {...props}
+    />
+  );
+});
+
+Input.displayName = "Input";
+
+export default Input;
