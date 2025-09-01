@@ -2,7 +2,24 @@
   "permissions": {
     "allow": [
       "Bash(npm run build:*)",
-      "Bash(npm run dev:*)"
+      "Bash(npm run dev:*)",
+      "Bash(npm run:*)",
+      "Bash(cat:*)",
+      "Bash(curl:*)",
+      "Bash(find:*)",
+      "Bash(sed:*)",
+      "Bash(grep:*)",
+      "Bash(for:*)",
+      "Bash(do)",
+      "Bash(if [[ ! \"$file\" =~ .bak$ ]])",
+      "Bash(then)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(npm start)",
+      "Bash(lsof:*)",
+      "Bash(do sed -i '' 's/import { apiService, aiEngine }/import { apiService, getAiEngine }/g' \"$file\")",
+      "Bash(do sed -i '' 's/import { aiEngine, apiService }/import { apiService, getAiEngine }/g' \"$file\")",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

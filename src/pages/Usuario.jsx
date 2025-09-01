@@ -44,15 +44,12 @@ import {
   DialogFooter,
   Label,
   Checkbox,
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue
+  Select
 } from '../components/ui';
-import { LineChart, BarChart } from '../components/charts';
-import { useAuth, useToast } from '../hooks';
-import { apiService } from '../services';
+import { LineChart } from '../components/charts/ChartsSimple';
+import { useAuth } from '../hooks';
+import useToast from '../hooks/useToast';
+import { apiService, getAiEngine } from '../services';
 import { formatARS, formatDateTime, formatPercentage } from '../utils/formatters';
 import { USER_ROLES } from '../utils/constants';
 
@@ -65,6 +62,10 @@ const Usuario = () => {
   const [userStats, setUserStats] = useState(null);
   const [userActivity, setUserActivity] = useState([]);
   const [salesHistory, setSalesHistory] = useState([]);
+  const [personalizedRecommendations, setPersonalizedRecommendations] = useState([]);
+  const [performanceInsights, setPerformanceInsights] = useState([]);
+  const [goalProgress, setGoalProgress] = useState(null);
+  const [personalizedTips, setPersonalizedTips] = useState([]);
   
   // Estados para modales
   const [showProfileModal, setShowProfileModal] = useState(false);
@@ -115,15 +116,33 @@ const Usuario = () => {
 
     try {
       setLoading(true);
-      const [statsResponse, activityResponse, salesResponse] = await Promise.all([
+      const [
+        statsResponse,
+        activityResponse,
+        salesResponse,
+        recommendationsResponse,
+        insightsResponse,
+        goalsResponse,
+        tipsResponse
+      ] = await Promise.all([
         apiService.getUserStats(user.id),
         apiService.getUserActivity(user.id, { limit: 20 }),
-        apiService.getUserSalesHistory(user.id, { days: 30 })
+        apiService.getUserSalesHistory(user.id, { days: 30 }),
+        aiEngine.getPersonalizedRecommendations(user.id),
+        aiEngine.getPerformanceInsights(user.id),
+        aiEngine.getGoalProgress(user.id),
+        aiEngine.getPersonalizedTips(user.id)
       ]);
 
       setUserStats(statsResponse);
       setUserActivity(activityResponse.data || []);
       setSalesHistory(salesResponse.data || []);
+      setPersonalizedRecommendations(recommendationsResponse || []);
+      setPerformanceInsights(insightsResponse || []);
+      setGoalProgress(goalsResponse);
+      setPersonalizedTips(tipsResponse || []);
+      
+      ai(`Dashboard personal actualizado con recomendaciones de IA`);
       
       // Cargar preferencias guardadas
       const preferences = localStorage.getItem(`user_preferences_${user.id}`);
@@ -227,7 +246,7 @@ const Usuario = () => {
   const userMetrics = [
     {
       title: 'Ventas del Mes',
-      value: formatARS.format(userStats?.monthlySales || 0),
+      value: formatARS(userStats?.monthlySales || 0),
       icon: DollarSign,
       color: 'text-green-600',
       bgColor: 'bg-green-50',
@@ -243,7 +262,7 @@ const Usuario = () => {
     },
     {
       title: 'Promedio por Venta',
-      value: formatARS.format(userStats?.averageTicket || 0),
+      value: formatARS(userStats?.averageTicket || 0),
       icon: Target,
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
@@ -417,7 +436,7 @@ const Usuario = () => {
                     <p className="text-xs text-gray-500 mt-1">{formatDateTime(activity.timestamp)}</p>
                     {activity.amount && (
                       <p className="text-sm font-bold text-green-600 mt-1">
-                        {formatARS.format(activity.amount)}
+                        {formatARS(activity.amount)}
                       </p>
                     )}
                   </div>
@@ -468,6 +487,121 @@ const Usuario = () => {
                     </div>
                   </div>
                   <p className="text-sm text-gray-700">{achievement.description}</p>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Recomendaciones Personalizadas de IA */}
+      {personalizedRecommendations.length > 0 && (
+        <Card className="border-l-4 border-l-emerald-500 bg-gradient-to-r from-emerald-50/50 to-transparent">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Zap className="w-5 h-5 text-emerald-600" />
+              Recomendaciones Personalizadas de IA
+              <Badge variant="ai" size="sm">Para Ti</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {personalizedRecommendations.slice(0, 4).map((rec, index) => (
+                <div key={index} className="p-4 bg-white/80 rounded-lg border border-emerald-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0">
+                      <Target className="w-4 h-4 text-emerald-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-semibold text-gray-900 mb-1">{rec.title}</h4>
+                      <p className="text-sm text-gray-600 mb-2">{rec.description}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary" size="sm">{rec.category}</Badge>
+                        <span className="text-xs text-emerald-600 font-medium">
+                          +{rec.potentialImpact}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Insights de Rendimiento */}
+      {performanceInsights.length > 0 && (
+        <Card className="border-l-4 border-l-blue-500 bg-gradient-to-r from-blue-50/50 to-transparent">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="w-5 h-5 text-blue-600" />
+              Análisis de Rendimiento IA
+              <Badge variant="ai" size="sm">Insights</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {performanceInsights.slice(0, 3).map((insight, index) => (
+                <div key={index} className="flex items-start gap-3 p-3 bg-white/80 rounded-lg border border-blue-200">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <BarChart3 className="w-4 h-4 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <div className="flex items-start justify-between mb-2">
+                      <h4 className="font-semibold text-gray-900">{insight.metric}</h4>
+                      <div className="text-right">
+                        <span className={`text-sm font-bold ${
+                          insight.trend === 'up' ? 'text-green-600' : 
+                          insight.trend === 'down' ? 'text-red-600' : 'text-gray-600'
+                        }`}>
+                          {insight.value}
+                        </span>
+                        <p className="text-xs text-gray-500">{insight.comparison}</p>
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600">{insight.analysis}</p>
+                    {insight.recommendation && (
+                      <p className="text-sm text-blue-700 mt-1 font-medium">
+                        💡 {insight.recommendation}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tips Personalizados */}
+      {personalizedTips.length > 0 && (
+        <Card className="border-l-4 border-l-orange-500 bg-gradient-to-r from-orange-50/50 to-transparent">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Star className="w-5 h-5 text-orange-600" />
+              Tips Personalizados
+              <Badge variant="ai" size="sm">IA Tips</Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {personalizedTips.slice(0, 6).map((tip, index) => (
+                <div key={index} className="p-4 bg-white rounded-lg border border-orange-200">
+                  <div className="flex items-start gap-3">
+                    <div className="w-6 h-6 rounded-full bg-orange-100 flex items-center justify-center flex-shrink-0">
+                      <CheckCircle className="w-3 h-3 text-orange-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h5 className="font-medium text-gray-900 text-sm mb-1">{tip.title}</h5>
+                      <p className="text-xs text-gray-600">{tip.description}</p>
+                      {tip.priority && (
+                        <Badge variant="outline" size="sm" className="mt-2">
+                          {tip.priority} prioridad
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
                 </div>
               ))}
             </div>
@@ -725,19 +859,16 @@ const Usuario = () => {
               <Label htmlFor="autoLogout">Cerrar sesi�n autom�tico (minutos)</Label>
               <Select 
                 value={preferencesForm.autoLogout.toString()} 
-                onValueChange={(value) => setPreferencesForm({...preferencesForm, autoLogout: parseInt(value)})}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="15">15 minutos</SelectItem>
-                  <SelectItem value="30">30 minutos</SelectItem>
-                  <SelectItem value="60">1 hora</SelectItem>
-                  <SelectItem value="120">2 horas</SelectItem>
-                  <SelectItem value="0">Nunca</SelectItem>
-                </SelectContent>
-              </Select>
+                onChange={(value) => setPreferencesForm({...preferencesForm, autoLogout: parseInt(value)})}
+                options={[
+                  { value: "15", label: "15 minutos" },
+                  { value: "30", label: "30 minutos" },
+                  { value: "60", label: "1 hora" },
+                  { value: "120", label: "2 horas" },
+                  { value: "0", label: "Nunca" }
+                ]}
+                placeholder="Seleccionar tiempo"
+              />
             </div>
 
             {/* Idioma */}
@@ -745,17 +876,14 @@ const Usuario = () => {
               <Label htmlFor="language">Idioma</Label>
               <Select 
                 value={preferencesForm.language} 
-                onValueChange={(value) => setPreferencesForm({...preferencesForm, language: value})}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="es">Espa�ol</SelectItem>
-                  <SelectItem value="en">English</SelectItem>
-                  <SelectItem value="pt">Portugu�s</SelectItem>
-                </SelectContent>
-              </Select>
+                onChange={(value) => setPreferencesForm({...preferencesForm, language: value})}
+                options={[
+                  { value: "es", label: "Español" },
+                  { value: "en", label: "English" },
+                  { value: "pt", label: "Português" }
+                ]}
+                placeholder="Seleccionar idioma"
+              />
             </div>
           </div>
 

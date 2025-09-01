@@ -10,6 +10,34 @@ export const USER_ROLES = {
 };
 
 /**
+ * Permisos del sistema
+ */
+export const PERMISSIONS = {
+  // Permisos de administración
+  MANAGE_USERS: 'manage_users',
+  MANAGE_ROLES: 'manage_roles',
+  VIEW_ANALYTICS: 'view_analytics',
+  MANAGE_SYSTEM: 'manage_system',
+  VIEW_AUDIT_LOGS: 'view_audit_logs',
+  
+  // Permisos de ventas
+  CREATE_SALE: 'create_sale',
+  CANCEL_SALE: 'cancel_sale',
+  VIEW_SALES: 'view_sales',
+  MANAGE_DISCOUNTS: 'manage_discounts',
+  
+  // Permisos de productos
+  MANAGE_PRODUCTS: 'manage_products',
+  VIEW_INVENTORY: 'view_inventory',
+  ADJUST_STOCK: 'adjust_stock',
+  
+  // Permisos de AI
+  USE_AI_FEATURES: 'use_ai_features',
+  MANAGE_AI_SETTINGS: 'manage_ai_settings',
+  VIEW_AI_ANALYTICS: 'view_ai_analytics'
+};
+
+/**
  * Secciones de navegación
  */
 export const NAVIGATION_SECTIONS = {
@@ -146,9 +174,10 @@ export const APP_CONFIG = {
  * Configuración de API
  */
 export const API_CONFIG = {
-  BASE_URL: process.env.REACT_APP_API_URL || 'http://localhost:8000/api/v1',
+  BASE_URL: import.meta.env.VITE_API_URL || 'http://localhost:3000/api/mock',
   TIMEOUT: 10000,
-  RETRY_ATTEMPTS: 3
+  RETRY_ATTEMPTS: 1, // Reducir reintentos para desarrollo
+  MOCK_MODE: true // Forzar modo mock para desarrollo
 };
 
 /**
@@ -160,7 +189,12 @@ export const STORAGE_KEYS = {
   LANGUAGE: 'pos_ai_language',
   SETTINGS: 'pos_ai_settings',
   CART: 'pos_ai_cart',
-  NOTIFICATIONS: 'pos_ai_notifications'
+  CART_DISCOUNT: 'pos_ai_cart_discount',
+  NOTIFICATIONS: 'pos_ai_notifications',
+  SALES_HISTORY: 'pos_ai_sales_history',
+  CASH_REGISTER: 'pos_ai_cash_register',
+  CASH_MOVEMENTS: 'pos_ai_cash_movements',
+  CASH_SESSION: 'pos_ai_cash_session'
 };
 
 /**

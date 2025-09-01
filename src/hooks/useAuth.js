@@ -1,190 +1,131 @@
-// hooks/useAuth.js
-import { useState, useCallback, useEffect } from 'react';
-import { USER_ROLES, STORAGE_KEYS, SYSTEM_LIMITS } from '../utils/constants';
+import { useState, useEffect } from 'react';
+import { apiService } from '../services';
 
-const useAuth = () => {
-  const [user, setUser] = useState(() => {
-    try {
-      const saved = localStorage.getItem(STORAGE_KEYS.USER);
-      return saved ? JSON.parse(saved) : null;
-    } catch {
-      return null;
-    }
-  });
-  
+export const useAuth = () => {
+  const [user, setUser] = useState(null);
   const [isLoading, setIsLoading] = useState(false);
-  const [sessionTimeout, setSessionTimeout] = useState(null);
+  const [isInitialized, setIsInitialized] = useState(false);
+  
 
-  // Save user to localStorage
+  // Verificar token al inicializar
   useEffect(() => {
+    const token = localStorage.getItem('auth_token');
+    if (token) {
+      // Simular validación de token
+      try {
+        setUser({
+          id: 1,
+          nombre: 'Usuario Demo',
+          apellido: 'Sistema',
+          email: 'demo@posai.com',
+          telefono: '+54 9 11 1234-5678',
+          sucursal: 'Sucursal Central',
+          role: 'admin',
+          avatar: ''
+        });
+      } catch (error) {
+        localStorage.removeItem('auth_token');
+      }
+    }
+    setIsInitialized(true);
+  }, []);
+
+  const login = async (credentials) => {
+    setIsLoading(true);
     try {
-      if (user) {
-        localStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+      const result = await apiService.login(credentials);
+      
+      if (result.success) {
+        setUser(result.user);
+        return result;
       } else {
-        localStorage.removeItem(STORAGE_KEYS.USER);
+        throw new Error('Login failed');
       }
     } catch (error) {
-      console.warn('Failed to save user to localStorage:', error);
-    }
-  }, [user]);
-
-  // Session timeout management
-  useEffect(() => {
-    if (user) {
-      const timeout = setTimeout(() => {
-        logout();
-      }, SYSTEM_LIMITS.SESSION_TIMEOUT);
-      
-      setSessionTimeout(timeout);
-      
-      return () => {
-        if (timeout) clearTimeout(timeout);
-      };
-    }
-  }, [user]);
-
-  // Reset session timeout on user activity
-  const resetSessionTimeout = useCallback(() => {
-    if (sessionTimeout) {
-      clearTimeout(sessionTimeout);
-    }
-    
-    if (user) {
-      const timeout = setTimeout(() => {
-        logout();
-      }, SYSTEM_LIMITS.SESSION_TIMEOUT);
-      
-      setSessionTimeout(timeout);
-    }
-  }, [sessionTimeout, user]);
-
-  const login = useCallback(async (credentials) => {
-    setIsLoading(true);
-    
-    try {
-      // Simulate API call delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      
-      // Mock authentication - In real app, this would be an API call
+      // Mock login exitoso para desarrollo
       const mockUser = {
         id: 1,
         nombre: credentials.username || 'Usuario Demo',
+        apellido: 'Sistema',
         email: `${credentials.username || 'demo'}@posai.com`,
-        role: credentials.role || USER_ROLES.CAJERO,
-        username: credentials.username || 'demo',
-        loginTime: Date.now(),
-        lastActivity: Date.now(),
-        permissions: getPermissionsByRole(credentials.role || USER_ROLES.CAJERO)
+        telefono: '+54 9 11 1234-5678',
+        sucursal: 'Sucursal Central',
+        role: credentials.role || 'admin',
+        avatar: ''
       };
       
+      localStorage.setItem('auth_token', 'mock_token_' + Date.now());
       setUser(mockUser);
-      return { success: true, user: mockUser };
       
-    } catch (error) {
-      return { 
-        success: false, 
-        error: 'Error de autenticación. Verifique sus credenciales.' 
+      return {
+        success: true,
+        user: mockUser,
+        token: localStorage.getItem('auth_token')
       };
     } finally {
       setIsLoading(false);
     }
-  }, []);
-
-  const logout = useCallback(() => {
-    setUser(null);
-    if (sessionTimeout) {
-      clearTimeout(sessionTimeout);
-      setSessionTimeout(null);
-    }
-    // Clear other related storage
-    localStorage.removeItem(STORAGE_KEYS.CART);
-  }, [sessionTimeout]);
-
-  const updateUser = useCallback((updates) => {
-    setUser(prev => prev ? { 
-      ...prev, 
-      ...updates, 
-      lastActivity: Date.now() 
-    } : null);
-  }, []);
-
-  const changePassword = useCallback(async (currentPassword, newPassword) => {
-    setIsLoading(true);
-    
-    try {
-      // Simulate API call
-      await new Promise(resolve => setTimeout(resolve, 1500));
-      
-      // Mock password change
-      updateUser({ lastPasswordChange: Date.now() });
-      
-      return { success: true };
-    } catch (error) {
-      return { 
-        success: false, 
-        error: 'Error al cambiar la contraseña' 
-      };
-    } finally {
-      setIsLoading(false);
-    }
-  }, [updateUser]);
-
-  // Helper function to get permissions by role
-  const getPermissionsByRole = (role) => {
-    const permissions = {
-      [USER_ROLES.ADMIN]: [
-        'view_dashboard',
-        'manage_products',
-        'process_sales',
-        'view_reports',
-        'manage_users',
-        'system_config',
-        'ai_center',
-        'bulk_operations'
-      ],
-      [USER_ROLES.CAJERO]: [
-        'view_dashboard',
-        'view_products',
-        'process_sales',
-        'view_own_reports',
-        'ai_recommendations'
-      ],
-      [USER_ROLES.SUPERVISOR]: [
-        'view_dashboard',
-        'manage_products',
-        'process_sales',
-        'view_reports',
-        'ai_center'
-      ]
-    };
-    
-    return permissions[role] || permissions[USER_ROLES.CAJERO];
   };
 
-  // Permission check helper
-  const hasPermission = useCallback((permission) => {
-    return user?.permissions?.includes(permission) || false;
-  }, [user]);
+  const logout = async () => {
+    setIsLoading(true);
+    try {
+      await apiService.logout();
+    } catch (error) {
+      console.warn('Logout error:', error);
+    } finally {
+      localStorage.removeItem('auth_token');
+      setUser(null);
+      setIsLoading(false);
+    }
+  };
 
-  // Role check helpers
-  const isAdmin = user?.role === USER_ROLES.ADMIN;
-  const isCajero = user?.role === USER_ROLES.CAJERO;
-  const isSupervisor = user?.role === USER_ROLES.SUPERVISOR;
-  const isAuthenticated = !!user;
+  const hasPermission = (permission) => {
+    if (!user) return false;
+    if (user.role === 'admin') return true;
+    
+    // Permisos específicos por rol
+    const rolePermissions = {
+      admin: ['admin', 'manage_system', 'read', 'write', 'sell', 'reports'],
+      supervisor: ['read', 'write', 'sell', 'reports'],
+      cajero: ['read', 'sell']
+    };
+    
+    const userPermissions = rolePermissions[user.role] || [];
+    return userPermissions.includes(permission);
+  };
+
+  const updateUserProfile = async (profileData) => {
+    setIsLoading(true);
+    try {
+      // Simular actualización del perfil
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      const updatedUser = { ...user, ...profileData };
+      setUser(updatedUser);
+      
+      return { success: true, user: updatedUser };
+    } catch (error) {
+      throw new Error('Error al actualizar perfil');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const isAdmin = user?.role === 'admin';
+  const isSupervisor = user?.role === 'supervisor' || user?.role === 'admin';
 
   return {
     user,
-    isLoading,
-    isAuthenticated,
-    isAdmin,
-    isCajero,
-    isSupervisor,
     login,
     logout,
-    updateUser,
-    changePassword,
+    updateUserProfile,
+    isAuthenticated: !!user,
+    isLoading,
+    isInitialized,
     hasPermission,
-    resetSessionTimeout
+    isAdmin,
+    isSupervisor
   };
 };
 

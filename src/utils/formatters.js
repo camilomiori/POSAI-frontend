@@ -3,11 +3,15 @@
 /**
  * Formateador de moneda argentina
  */
-export const formatARS = new Intl.NumberFormat('es-AR', { 
+const arsFormatter = new Intl.NumberFormat('es-AR', { 
   style: 'currency', 
   currency: 'ARS', 
   maximumFractionDigits: 2 
 });
+
+export const formatARS = (amount) => {
+  return arsFormatter.format(amount || 0);
+};
 
 /**
  * Formatea fecha y hora en formato argentino
@@ -100,4 +104,13 @@ export const formatFileSize = (bytes) => {
   if (bytes === 0) return '0 Bytes';
   const i = Math.floor(Math.log(bytes) / Math.log(1024));
   return Math.round(bytes / Math.pow(1024, i) * 100) / 100 + ' ' + sizes[i];
+};
+
+/**
+ * Función auxiliar para formatear precios usando formatARS
+ * @param {number} amount - Cantidad a formatear
+ * @returns {string} Precio formateado
+ */
+export const formatPrice = (amount) => {
+  return formatARS(amount || 0);
 };

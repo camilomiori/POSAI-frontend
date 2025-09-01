@@ -5,7 +5,6 @@ import {
   Check, 
   X, 
   Trash2, 
-  MarkAsRead,
   Filter,
   Zap,
   TrendingUp,
@@ -18,7 +17,7 @@ import { useNotifications } from '../../hooks';
 import { formatDateTime } from '../../utils/formatters';
 import { NOTIFICATION_TYPES } from '../../utils/constants';
 
-const NotificationBell = ({ 
+export const NotificationBell = ({ 
   className = '',
   showPreview = true,
   autoMarkAsRead = true,
@@ -359,5 +358,3 @@ const NotificationBell = ({
     </div>
   );
 };
-
-export default NotificationBell;

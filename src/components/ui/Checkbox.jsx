@@ -20,8 +20,8 @@ const Checkbox = React.forwardRef(({
       aria-checked={indeterminate ? 'mixed' : checked}
       data-state={indeterminate ? 'indeterminate' : checked ? 'checked' : 'unchecked'}
       className={cn(
-        "peer h-4 w-4 shrink-0 rounded-sm border border-neutral-200 ring-offset-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 dark:border-neutral-700 dark:ring-offset-neutral-950",
-        (checked || indeterminate) && "bg-gradient-to-r from-blue-500 to-purple-500 text-white border-transparent",
+        "peer h-4 w-4 shrink-0 rounded border border-gray-300 ring-offset-white transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 hover:border-blue-400",
+        (checked || indeterminate) && "bg-blue-600 hover:bg-blue-700 text-white border-blue-600 shadow-sm",
         className
       )}
       onClick={() => onCheckedChange && onCheckedChange(!checked)}

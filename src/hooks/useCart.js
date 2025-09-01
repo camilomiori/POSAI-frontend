@@ -13,7 +13,14 @@ const useCart = () => {
     }
   });
 
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const [discountPercent, setDiscountPercent] = useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEYS.CART_DISCOUNT);
+      return saved ? parseFloat(saved) : 0;
+    } catch {
+      return 0;
+    }
+  });
 
   // Save cart to localStorage
   useEffect(() => {
@@ -23,6 +30,15 @@ const useCart = () => {
       console.warn('Failed to save cart to localStorage:', error);
     }
   }, [items]);
+
+  // Save discount to localStorage
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEYS.CART_DISCOUNT, discountPercent.toString());
+    } catch (error) {
+      console.warn('Failed to save discount to localStorage:', error);
+    }
+  }, [discountPercent]);
 
   // Add item to cart
   const addItem = useCallback((product, quantity = 1) => {

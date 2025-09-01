@@ -1,0 +1,103 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Launch React App (Chrome)",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/src",
+      "skipFiles": [
+        "<node_internals>/**",
+        "${workspaceFolder}/node_modules/**",
+        "${workspaceFolder}/dist/**"
+      ],
+      "sourceMaps": true,
+      "smartStep": true,
+      "console": "integratedTerminal",
+      "preLaunchTask": "npm: dev",
+      "presentation": {
+        "group": "React Debug",
+        "order": 1
+      }
+    },
+    {
+      "name": "Debug React App (Edge)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/src",
+      "skipFiles": [
+        "<node_internals>/**",
+        "${workspaceFolder}/node_modules/**",
+        "${workspaceFolder}/dist/**"
+      ],
+      "sourceMaps": true,
+      "smartStep": true,
+      "console": "integratedTerminal",
+      "preLaunchTask": "npm: dev",
+      "presentation": {
+        "group": "React Debug",
+        "order": 2
+      }
+    },
+    {
+      "name": "Attach to Chrome",
+      "type": "chrome",
+      "request": "attach",
+      "port": 9222,
+      "webRoot": "${workspaceFolder}/src",
+      "skipFiles": [
+        "<node_internals>/**",
+        "${workspaceFolder}/node_modules/**"
+      ],
+      "sourceMaps": true,
+      "presentation": {
+        "group": "React Debug",
+        "order": 3
+      }
+    },
+    {
+      "name": "Debug Vite Build",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/vite",
+      "args": ["build", "--sourcemap"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "env": {
+        "NODE_ENV": "development"
+      },
+      "presentation": {
+        "group": "Build Debug",
+        "order": 1
+      }
+    },
+    {
+      "name": "Debug Component Tests",
+      "type": "node",
+      "request": "launch",
+      "program": "${workspaceFolder}/node_modules/.bin/vitest",
+      "args": ["run", "--reporter=verbose"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal",
+      "skipFiles": [
+        "<node_internals>/**"
+      ],
+      "presentation": {
+        "group": "Test Debug",
+        "order": 1
+      }
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Launch App & Debug",
+      "configurations": ["Launch React App (Chrome)"],
+      "presentation": {
+        "group": "React Debug",
+        "order": 0
+      }
+    }
+  ]
+}

@@ -11,7 +11,7 @@ import { cn } from '../../utils/helpers';
 import { NOTIFICATION_TYPES } from '../../utils/constants';
 
 // Individual Toast Component
-const Toast = ({ 
+export const Toast = ({ 
   id,
   type = NOTIFICATION_TYPES.INFO,
   message,
@@ -100,7 +100,7 @@ const Toast = ({
       <button
         onClick={handleExit}
         className="flex-shrink-0 p-1 hover:bg-black/10 rounded-lg transition-colors duration-200 -mt-1 -mr-1"
-        aria-label="Cerrar notificación"
+        aria-label="Cerrar notificaciï¿½n"
       >
         <X className="w-4 h-4 opacity-60 hover:opacity-100" />
       </button>
@@ -244,30 +244,39 @@ const useToastContext = () => {
 // Pre-configured toast functions for common use cases
 const showSuccessToast = (message) => {
   // This would use the context or a global toast system
-  console.log('Success:', message);
+  if (import.meta.env.DEV) {
+    console.log('Success:', message);
+  }
 };
 
 const showErrorToast = (message) => {
   // This would use the context or a global toast system
-  console.log('Error:', message);
+  if (import.meta.env.DEV) {
+    console.log('Error:', message);
+  }
 };
 
 const showWarningToast = (message) => {
   // This would use the context or a global toast system
-  console.log('Warning:', message);
+  if (import.meta.env.DEV) {
+    console.log('Warning:', message);
+  }
 };
 
 const showInfoToast = (message) => {
   // This would use the context or a global toast system
-  console.log('Info:', message);
+  if (import.meta.env.DEV) {
+    console.log('Info:', message);
+  }
 };
 
 const showAIToast = (message) => {
   // This would use the context or a global toast system
-  console.log('AI:', message);
+  if (import.meta.env.DEV) {
+    console.log('AI:', message);
+  }
 };
 
-export default Toast;
 export {
   ToastContainer,
   ToastProvider,

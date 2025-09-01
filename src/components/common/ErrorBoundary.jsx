@@ -2,7 +2,7 @@ import React from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import Button from '../ui/Button';
 
-class ErrorBoundary extends React.Component {
+export class ErrorBoundary extends React.Component {
   constructor(props) {
     super(props);
     this.state = { hasError: false, error: null, errorInfo: null };
@@ -41,11 +41,11 @@ class ErrorBoundary extends React.Component {
               </div>
               
               <h1 className="text-2xl font-bold text-gray-900 mb-3">
-                ¡Ups! Algo salió mal
+                ï¿½Ups! Algo saliï¿½ mal
               </h1>
               
               <p className="text-gray-600 mb-6">
-                Se ha producido un error inesperado. No te preocupes, puedes intentar recargar la página.
+                Se ha producido un error inesperado. No te preocupes, puedes intentar recargar la pï¿½gina.
               </p>
 
               <div className="space-y-3 mb-6">
@@ -70,18 +70,20 @@ class ErrorBoundary extends React.Component {
               {process.env.NODE_ENV === 'development' && (
                 <details className="text-left">
                   <summary className="text-sm text-gray-500 cursor-pointer mb-2">
-                    Detalles técnicos (desarrollo)
+                    Detalles tï¿½cnicos (desarrollo)
                   </summary>
                   <div className="bg-gray-50 rounded-lg p-3 text-xs text-gray-700">
                     <div className="mb-2">
                       <strong>Error:</strong> {this.state.error && this.state.error.toString()}
                     </div>
-                    <div>
-                      <strong>Stack:</strong>
-                      <pre className="mt-1 whitespace-pre-wrap">
-                        {this.state.errorInfo.componentStack}
-                      </pre>
-                    </div>
+                    {this.state.errorInfo && (
+                      <div>
+                        <strong>Stack:</strong>
+                        <pre className="mt-1 whitespace-pre-wrap">
+                          {this.state.errorInfo.componentStack}
+                        </pre>
+                      </div>
+                    )}
                   </div>
                 </details>
               )}
@@ -94,5 +96,3 @@ class ErrorBoundary extends React.Component {
     return this.props.children;
   }
 }
-
-export default ErrorBoundary;

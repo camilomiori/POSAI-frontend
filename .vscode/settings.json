@@ -1,0 +1,70 @@
+{
+  // Debug Configuration
+  "debug.console.fontSize": 14,
+  "debug.console.wordWrap": false,
+  "debug.inlineValues": "auto",
+  "debug.showBreakpointsInOverviewRuler": true,
+  "debug.allowBreakpointsEverywhere": true,
+  
+  // TypeScript/JavaScript
+  "typescript.preferences.includePackageJsonAutoImports": "auto",
+  "typescript.suggest.autoImports": true,
+  "javascript.suggest.autoImports": true,
+  "typescript.updateImportsOnFileMove.enabled": "always",
+  "javascript.updateImportsOnFileMove.enabled": "always",
+  
+  // React Development
+  "emmet.includeLanguages": {
+    "javascript": "javascriptreact",
+    "typescript": "typescriptreact"
+  },
+  "emmet.triggerExpansionOnTab": true,
+  "emmet.showSuggestionsAsSnippets": true,
+  
+  // Error Lens (if installed)
+  "errorLens.enabled": true,
+  "errorLens.enabledDiagnosticLevels": ["error", "warning"],
+  "errorLens.fontSize": "12px",
+  
+  // Console Ninja (if installed) - Enhanced debugging
+  "console-ninja.featureSet": "Community",
+  "console-ninja.outputMode": "beside",
+  
+  // File watching
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/dist/**": true,
+    "**/.vite/**": true,
+    "**/coverage/**": true
+  },
+  
+  // Formatting
+  "editor.formatOnSave": true,
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit"
+  },
+  
+  // Terminal
+  "terminal.integrated.fontSize": 13,
+  "terminal.integrated.scrollback": 10000,
+  
+  // Explorer
+  "explorer.fileNesting.enabled": true,
+  "explorer.fileNesting.patterns": {
+    "*.js": "${capture}.js.map",
+    "*.jsx": "${capture}.jsx.map",
+    "*.ts": "${capture}.ts.map",
+    "*.tsx": "${capture}.tsx.map",
+    "package.json": "package-lock.json, yarn.lock, pnpm-lock.yaml",
+    "vite.config.*": "vite.config.*",
+    "tailwind.config.*": "tailwind.config.*, postcss.config.*"
+  },
+  
+  // Breadcrumbs
+  "breadcrumbs.enabled": true,
+  "breadcrumbs.symbolPath": "on",
+  
+  // Problems
+  "problems.decorations.enabled": true,
+  "problems.showCurrentInStatus": true
+}

@@ -2,7 +2,7 @@ import React from 'react';
 import { Loader2, Zap } from 'lucide-react';
 import { cn } from '../../utils/helpers';
 
-const LoadingSpinner = ({ 
+export const LoadingSpinner = ({ 
   size = 'default',
   variant = 'default', 
   text = '',
@@ -73,7 +73,7 @@ const LoadingSpinner = ({
 };
 
 // Pre-configured spinner components for common use cases
-const PageLoadingSpinner = ({ text = "Cargando página..." }) => (
+const PageLoadingSpinner = ({ text = "Cargando pï¿½gina..." }) => (
   <LoadingSpinner 
     size="lg" 
     text={text} 
@@ -164,8 +164,10 @@ const ChartSkeleton = ({ height = 300 }) => (
   </div>
 );
 
-// Export all components
+// Default export
 export default LoadingSpinner;
+
+// Export all components
 export {
   PageLoadingSpinner,
   AILoadingSpinner,

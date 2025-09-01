@@ -1,7 +1,7 @@
 // services/aiEngine.js
 import { MOCK_PRODUCTS, MOCK_SALES } from './mockData';
-import { DEMAND_TRENDS, PRODUCT_CATEGORIES } from '../utils/constants';
 import { sumBy, groupBy, maxBy, minBy } from '../utils/helpers';
+import { DEMAND_TRENDS } from '../utils/constants';
 
 /**
  * AI Engine - Sistema de Inteligencia Artificial para POS
@@ -244,6 +244,55 @@ class AIEngine {
       pricePosition: 'Competitivo',
       qualityPosition: 'Superior',
       servicePosition: 'Excelente',
+      trends: [
+        {
+          category: 'Neumáticos',
+          trend: 'up',
+          change: 34.2,
+          analysis: 'Pico estacional + nuevas regulaciones UE impulsan demanda premium'
+        },
+        {
+          category: 'Aceites y Lubricantes',
+          trend: 'up',
+          change: 18.7,
+          analysis: 'Tendencia hacia aceites sintéticos de larga duración'
+        },
+        {
+          category: 'Repuestos de Motor',
+          trend: 'stable',
+          change: -2.1,
+          analysis: 'Mercado maduro con crecimiento estable en recambios'
+        },
+        {
+          category: 'Frenos',
+          trend: 'up',
+          change: 12.5,
+          analysis: 'Mayor conciencia sobre seguridad impulsa renovación preventiva'
+        }
+      ],
+      opportunities: [
+        {
+          title: 'Neumáticos Premium',
+          description: 'Demanda creciente por neumáticos de alto rendimiento',
+          impact: 'high',
+          probability: 78,
+          revenueIncrease: 15600
+        },
+        {
+          title: 'Servicios de Mantenimiento',
+          description: 'Expansión a servicios integrales de mantenimiento',
+          impact: 'high',
+          probability: 72,
+          revenueIncrease: 12800
+        },
+        {
+          title: 'E-commerce',
+          description: 'Plataforma online para ampliar alcance geográfico',
+          impact: 'medium',
+          probability: 67,
+          revenueIncrease: 5400
+        }
+      ],
       recommendations: [
         'Aumentar stock de neumáticos para capturar mayor market share durante la temporada alta',
         'Implementar programa de fidelización para competir con precios bajos de Competidor A',
@@ -253,10 +302,6 @@ class AIEngine {
       threats: [
         'Nuevos competidores online con menores costos operativos',
         'Fluctuaciones en el tipo de cambio afectando costos de importación'
-      ],
-      opportunities: [
-        'Crecimiento del mercado de motocicletas eléctricas',
-        'Expansión a ciudades del interior con menor competencia'
       ],
       generatedAt: Date.now()
     };
@@ -353,11 +398,13 @@ class AIEngine {
   _getSeasonalFactor(category) {
     const month = new Date().getMonth();
     const seasonalFactors = {
-      [PRODUCT_CATEGORIES.NEUMATICOS]: month >= 2 && month <= 4 ? 1.3 : 1.0, // Primavera
-      [PRODUCT_CATEGORIES.FILTROS]: month >= 8 && month <= 10 ? 1.2 : 1.0, // Primavera (mantenimiento)
-      [PRODUCT_CATEGORIES.ACCESORIOS]: month === 11 || month === 0 ? 1.4 : 1.0, // Vacaciones
-      [PRODUCT_CATEGORIES.TRANSMISION]: 1.0,
-      [PRODUCT_CATEGORIES.FRENOS]: month >= 11 || month <= 1 ? 1.2 : 1.0 // Verano (viajes)
+      'neumaticos': month >= 2 && month <= 4 ? 1.3 : 1.0, // Primavera
+      'filtros': month >= 8 && month <= 10 ? 1.2 : 1.0, // Primavera (mantenimiento)
+      'accesorios': month === 11 || month === 0 ? 1.4 : 1.0, // Vacaciones
+      'transmision': 1.0,
+      'frenos': month >= 11 || month <= 1 ? 1.2 : 1.0, // Verano (viajes)
+      'aceites': 1.0,
+      'baterias': 1.0
     };
     return seasonalFactors[category] || 1.0;
   }
@@ -397,16 +444,16 @@ class AIEngine {
     const recommendations = [];
     
     const rules = {
-      [PRODUCT_CATEGORIES.NEUMATICOS]: [
-        { category: PRODUCT_CATEGORIES.ACCESORIOS, reason: 'Frecuentemente comprado junto', confidence: 0.87, uplift: '+15% conversión' },
-        { category: PRODUCT_CATEGORIES.FRENOS, reason: 'Mantenimiento complementario', confidence: 0.73, uplift: '+8% ticket promedio' }
+      'neumaticos': [
+        { category: 'accesorios', reason: 'Frecuentemente comprado junto', confidence: 0.87, uplift: '+15% conversión' },
+        { category: 'frenos', reason: 'Mantenimiento complementario', confidence: 0.73, uplift: '+8% ticket promedio' }
       ],
-      [PRODUCT_CATEGORIES.TRANSMISION]: [
-        { category: PRODUCT_CATEGORIES.FILTROS, reason: 'Mantenimiento integral', confidence: 0.79, uplift: '+12% satisfacción' },
-        { category: PRODUCT_CATEGORIES.ACCESORIOS, reason: 'Accesorios relacionados', confidence: 0.65, uplift: '+6% ticket promedio' }
+      'transmision': [
+        { category: 'filtros', reason: 'Mantenimiento integral', confidence: 0.79, uplift: '+12% satisfacción' },
+        { category: 'accesorios', reason: 'Accesorios relacionados', confidence: 0.65, uplift: '+6% ticket promedio' }
       ],
-      [PRODUCT_CATEGORIES.FRENOS]: [
-        { category: PRODUCT_CATEGORIES.NEUMATICOS, reason: 'Seguridad integral', confidence: 0.82, uplift: '+18% conversión' }
+      'frenos': [
+        { category: 'neumaticos', reason: 'Seguridad integral', confidence: 0.82, uplift: '+18% conversión' }
       ]
     };
 
@@ -448,13 +495,15 @@ class AIEngine {
   }
 
   _calculateDemandElasticity(product) {
-    // Simular elasticidad de demanda
+    // Simular elasticidad de demanda con valores por string literal
     const categoryElasticity = {
-      [PRODUCT_CATEGORIES.NEUMATICOS]: -1.2, // Elástico
-      [PRODUCT_CATEGORIES.FILTROS]: -0.8, // Inelástico
-      [PRODUCT_CATEGORIES.ACCESORIOS]: -1.5, // Muy elástico
-      [PRODUCT_CATEGORIES.TRANSMISION]: -0.9, // Ligeramente inelástico
-      [PRODUCT_CATEGORIES.FRENOS]: -0.7 // Inelástico
+      'neumaticos': -1.2, // Elástico
+      'filtros': -0.8, // Inelástico
+      'accesorios': -1.5, // Muy elástico
+      'transmision': -0.9, // Ligeramente inelástico
+      'frenos': -0.7, // Inelástico
+      'aceites': -0.9, // Inelástico
+      'baterias': -1.1 // Elástico
     };
     
     return {
@@ -505,6 +554,402 @@ class AIEngine {
     const percentage = Math.floor(Math.random() * 25) + 5; // 5-30%
     
     return { trend, percentage };
+  }
+
+  /**
+   * Obtiene alertas críticas del sistema
+   * @returns {Array} Alertas críticas
+   */
+  getCriticalAlerts() {
+    const alerts = [];
+    
+    // Alertas de stock crítico
+    const criticalStock = MOCK_PRODUCTS.filter(p => p.stock <= p.reorderPoint);
+    if (criticalStock.length > 0) {
+      alerts.push({
+        title: 'Stock Crítico',
+        message: `${criticalStock.length} productos con stock bajo`,
+        severity: 'high',
+        timestamp: Date.now(),
+        type: 'inventory'
+      });
+    }
+
+    // Alertas de tendencias negativas
+    const salesTrend = this._analyzeSalesTrend();
+    if (salesTrend.growth < -0.1) {
+      alerts.push({
+        title: 'Tendencia de Ventas Negativa',
+        message: `Ventas bajaron ${Math.abs(salesTrend.growth * 100).toFixed(1)}%`,
+        severity: 'medium',
+        timestamp: Date.now(),
+        type: 'sales'
+      });
+    }
+
+    return alerts;
+  }
+
+  /**
+   * Obtiene optimizaciones de inventario
+   * @returns {Array} Optimizaciones de inventario
+   */
+  getInventoryOptimizations() {
+    const optimizations = [];
+    
+    MOCK_PRODUCTS.forEach(product => {
+      const prediction = this.predictDemand(product.id, 30);
+      if (prediction.recommendation === 'reorder') {
+        optimizations.push({
+          product: product.name,
+          suggestion: `Reponer stock: ${prediction.daysToStockout} días restantes`,
+          impact: 'high',
+          potentialSavings: `$${(product.price * product.reorderPoint * 0.1).toFixed(0)}`
+        });
+      }
+    });
+
+    return optimizations.slice(0, 5);
+  }
+
+  /**
+   * Obtiene pronóstico de demanda general
+   * @returns {Array} Pronóstico de demanda
+   */
+  getDemandForecast() {
+    return MOCK_PRODUCTS.slice(0, 6).map(product => {
+      const prediction = this.predictDemand(product.id, 30);
+      return {
+        product: product.name,
+        category: product.category,
+        predictedDemand: prediction.predictedSales,
+        confidence: prediction.confidence
+      };
+    });
+  }
+
+  /**
+   * Obtiene insights de precios
+   * @returns {Array} Insights de precios
+   */
+  getPricingInsights() {
+    return MOCK_PRODUCTS.slice(0, 4).map(product => {
+      const optimization = this.optimizePrice(product.id);
+      return {
+        product: product.name,
+        currentPrice: product.price,
+        suggestedPrice: optimization.suggestedPrice,
+        reasoning: optimization.reasoning,
+        impact: optimization.potentialIncrease
+      };
+    });
+  }
+
+  /**
+   * Obtiene insights de ventas
+   * @param {Array} cartItems - Items del carrito
+   * @returns {Array} Insights de ventas
+   */
+  getSalesInsights(cartItems) {
+    const insights = [];
+    
+    if (cartItems.length > 0) {
+      const totalValue = cartItems.reduce((sum, item) => sum + item.price * item.quantity, 0);
+      
+      insights.push({
+        title: 'Venta Promedio Superior',
+        message: `Esta venta supera el ticket promedio en ${((totalValue / 45000 - 1) * 100).toFixed(0)}%`,
+        impact: '+$' + (totalValue - 45000).toFixed(0)
+      });
+    }
+
+    return insights;
+  }
+
+  /**
+   * Obtiene optimizaciones de precios para ventas
+   * @param {Array} cartItems - Items del carrito
+   * @returns {Array} Optimizaciones de precios
+   */
+  getPriceOptimizations(cartItems) {
+    return cartItems.slice(0, 2).map(item => {
+      const product = MOCK_PRODUCTS.find(p => p.id === item.id);
+      if (!product) return null;
+      
+      const optimization = this.optimizePrice(product.id);
+      return {
+        product: product.name,
+        currentPrice: product.price,
+        suggestedPrice: optimization.suggestedPrice,
+        reason: optimization.reasoning
+      };
+    }).filter(Boolean);
+  }
+
+  /**
+   * Obtiene sugerencias de venta cruzada
+   * @param {Array} cartItems - Items del carrito
+   * @returns {Array} Sugerencias de venta cruzada
+   */
+  getCrossSellSuggestions(cartItems) {
+    const recommendations = this.getRecommendations(cartItems);
+    return recommendations.slice(0, 3);
+  }
+
+  /**
+   * Genera perfil de cliente
+   * @param {string} email - Email del cliente
+   * @returns {Object} Perfil de cliente
+   */
+  generateCustomerProfile(email) {
+    const segments = ['Premium', 'Ocasional', 'Mayorista'];
+    const segment = segments[Math.floor(Math.random() * segments.length)];
+    
+    return {
+      segment,
+      avgTicket: 35000 + Math.random() * 40000,
+      loyaltyScore: Math.floor(Math.random() * 40) + 60,
+      preferences: ['Neumáticos', 'Filtros', 'Accesorios'].slice(0, Math.floor(Math.random() * 3) + 1)
+    };
+  }
+
+  /**
+   * Obtiene métricas de performance
+   * @returns {Object} Métricas de performance
+   */
+  getPerformanceMetrics() {
+    return {
+      systemEfficiency: 0.89 + Math.random() * 0.1,
+      userProductivity: 75 + Math.floor(Math.random() * 20),
+      aiAccuracy: 84 + Math.floor(Math.random() * 12),
+      costOptimization: 12 + Math.floor(Math.random() * 15)
+    };
+  }
+
+  /**
+   * Obtiene alertas de seguridad
+   * @returns {Array} Alertas de seguridad
+   */
+  getSecurityAlerts() {
+    const alerts = [];
+    
+    if (Math.random() > 0.7) {
+      alerts.push({
+        title: 'Acceso Inusual Detectado',
+        message: 'Login desde nueva ubicación',
+        timestamp: Date.now() - Math.random() * 3600000
+      });
+    }
+
+    return alerts;
+  }
+
+  /**
+   * Obtiene recomendaciones operacionales
+   * @returns {Array} Recomendaciones operacionales
+   */
+  getOperationalRecommendations() {
+    return [
+      {
+        title: 'Optimizar Horarios de Reposición',
+        description: 'Realizar reposición durante horas de menor afluencia',
+        priority: 'alta',
+        potentialBenefit: '15% eficiencia'
+      },
+      {
+        title: 'Implementar Descuentos Automáticos',
+        description: 'Para productos con exceso de stock',
+        priority: 'media',
+        potentialBenefit: '8% rotación'
+      }
+    ];
+  }
+
+  /**
+   * Obtiene recomendaciones personalizadas
+   * @param {number} userId - ID del usuario
+   * @returns {Array} Recomendaciones personalizadas
+   */
+  getPersonalizedRecommendations(userId) {
+    return [
+      {
+        title: 'Mejorar Tiempo de Atención',
+        description: 'Promedio actual: 4.2 min, objetivo: 3.5 min',
+        category: 'Productividad',
+        potentialImpact: '12% satisfacción'
+      },
+      {
+        title: 'Aumentar Venta Sugerida',
+        description: 'Sugerir productos complementarios activamente',
+        category: 'Ventas',
+        potentialImpact: '18% ticket promedio'
+      }
+    ];
+  }
+
+  /**
+   * Obtiene insights de performance personal
+   * @param {number} userId - ID del usuario
+   * @returns {Array} Insights de performance
+   */
+  getPerformanceInsights(userId) {
+    return [
+      {
+        metric: 'Ventas del Mes',
+        value: '$124,500',
+        trend: 'up',
+        comparison: '+15% vs mes anterior',
+        analysis: 'Excelente performance en productos premium',
+        recommendation: 'Continuar enfoque en productos de alto valor'
+      },
+      {
+        metric: 'Tiempo Promedio por Venta',
+        value: '4.2 min',
+        trend: 'down',
+        comparison: '-0.8 min vs mes anterior',
+        analysis: 'Mejora significativa en eficiencia',
+        recommendation: 'Mantener ritmo actual'
+      }
+    ];
+  }
+
+  /**
+   * Obtiene progreso de objetivos
+   * @param {number} userId - ID del usuario
+   * @returns {Object} Progreso de objetivos
+   */
+  getGoalProgress(userId) {
+    return {
+      goals: [
+        {
+          title: 'Ventas Mensuales',
+          progress: 78,
+          target: '$150,000',
+          current: '$124,500',
+          status: 'on_track',
+          aiPrediction: 'Alcanzará $147,000 (98% del objetivo)'
+        },
+        {
+          title: 'Productos Nuevos Vendidos',
+          progress: 65,
+          target: '20 productos',
+          current: '13 productos',
+          status: 'behind',
+          aiPrediction: 'Necesita vender 2 productos más esta semana'
+        }
+      ]
+    };
+  }
+
+  /**
+   * Obtiene tips personalizados
+   * @param {number} userId - ID del usuario
+   * @returns {Array} Tips personalizados
+   */
+  getPersonalizedTips(userId) {
+    return [
+      {
+        title: 'Hora Pico de Ventas',
+        description: 'Tus mejores ventas son entre 10-12h y 15-17h',
+        priority: 'alta'
+      },
+      {
+        title: 'Producto Estrella Personal',
+        description: 'Los filtros de aceite son tu especialidad (+23% conversión)',
+        priority: 'media'
+      },
+      {
+        title: 'Oportunidad de Cross-sell',
+        description: 'Cuando vendes neumáticos, sugiere balanceado (+32% aceptación)',
+        priority: 'alta'
+      }
+    ];
+  }
+
+  /**
+   * Obtiene configuración de IA
+   * @returns {Object} Configuración de IA
+   */
+  getConfiguration() {
+    return {
+      enabled: true,
+      predictionAccuracy: 0.85,
+      autoOptimization: true,
+      realTimeAnalysis: true,
+      priceOptimization: true,
+      inventoryPrediction: true,
+      customerSegmentation: true,
+      marketAnalysis: false,
+      notifications: {
+        criticalAlerts: true,
+        dailyReports: true,
+        priceChanges: false,
+        stockAlerts: true
+      },
+      thresholds: {
+        lowStockAlert: 10,
+        highDemandThreshold: 80,
+        priceVariationLimit: 15,
+        confidenceLevel: 75
+      },
+      modelSettings: {
+        trainingFrequency: 'weekly',
+        dataRetention: 365,
+        useExternalData: false,
+        learningRate: 0.01
+      }
+    };
+  }
+
+  /**
+   * Actualiza configuración de IA
+   * @param {Object} config - Nueva configuración
+   * @returns {Promise<boolean>} Resultado de la actualización
+   */
+  async updateConfiguration(config) {
+    // Simular guardado de configuración
+    await new Promise(resolve => setTimeout(resolve, 500));
+    return true;
+  }
+
+  /**
+   * Obtiene estadísticas del modelo
+   * @returns {Object} Estadísticas del modelo
+   */
+  getModelStatistics() {
+    return {
+      accuracy: 0.852,
+      predictionsToday: 247,
+      lastTraining: Date.now() - 86400000, // Ayer
+      dataPoints: '15.2K',
+      totalPredictions: 12847,
+      moduleAccuracy: {
+        demand: 0.87,
+        pricing: 0.82,
+        segmentation: 0.79
+      }
+    };
+  }
+
+  /**
+   * Resetea el modelo de IA
+   * @returns {Promise<boolean>} Resultado del reset
+   */
+  async resetModel() {
+    await new Promise(resolve => setTimeout(resolve, 2000));
+    this.lastTraining = Date.now();
+    return true;
+  }
+
+  /**
+   * Reentrena el modelo de IA
+   * @returns {Promise<boolean>} Resultado del reentrenamiento
+   */
+  async retrainModel() {
+    await new Promise(resolve => setTimeout(resolve, 5000));
+    this.lastTraining = Date.now();
+    this.confidence = Math.min(0.98, this.confidence + 0.02);
+    return true;
   }
 
   /**

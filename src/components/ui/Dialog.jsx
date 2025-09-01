@@ -24,10 +24,10 @@ const Dialog = ({ children, open, onOpenChange }) => {
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center" role="dialog" aria-modal="true">
       <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm" 
+        className="fixed inset-0 bg-blue-900/20 backdrop-blur-sm" 
         onClick={() => onOpenChange(false)}
       />
-      <div className="relative z-50 max-h-[85vh] w-full max-w-lg overflow-auto bg-white/95 backdrop-blur-lg dark:bg-neutral-900/95 rounded-3xl border border-neutral-200/50 dark:border-neutral-700/50 shadow-2xl">
+      <div className="relative z-50 max-h-[85vh] w-full max-w-lg overflow-auto bg-white/98 backdrop-blur-lg rounded-3xl border border-blue-200/50 shadow-2xl">
         {children}
       </div>
     </div>
