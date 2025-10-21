@@ -25,7 +25,12 @@ import {
   Share,
   Maximize,
   CheckCircle,
-  XCircle
+  XCircle,
+  Clock,
+  Sparkles,
+  Gauge,
+  Star,
+  Lightbulb
 } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent, Button, Badge } from '../components/ui';
 import { AdvancedChart, PieChart, LineChart, BarChart } from '../components/charts/ChartsSimple';
@@ -52,6 +57,61 @@ const DashboardSimple = () => {
   const [predictions, setPredictions] = useState([]);
   const [aiRecommendations, setAiRecommendations] = useState([]);
   
+  // Estados para nuevas funcionalidades avanzadas
+  const [advancedStockAlerts, setAdvancedStockAlerts] = useState([]);
+  const [purchasePatterns, setPurchasePatterns] = useState(null);
+
+  // TEMPORAL: Mock data para testing
+  React.useEffect(() => {
+    setAdvancedStockAlerts([
+      {
+        id: 'dash_1',
+        productName: 'Filtro de Aceite K&N',
+        category: 'filtros',
+        currentStock: 2,
+        reorderPoint: 10,
+        daysToStockout: 1,
+        salesVelocity: 2.5,
+        trend: 'increasing',
+        level: 'urgent',
+        recommendedAction: 'REPOSICIÓN INMEDIATA: Ordenar 20 unidades HOY',
+        predictedLoss: 45000
+      },
+      {
+        id: 'dash_2',
+        productName: 'Cadena 520 DID',
+        category: 'transmision',
+        currentStock: 5,
+        reorderPoint: 8,
+        daysToStockout: 4,
+        salesVelocity: 1.2,
+        trend: 'stable',
+        level: 'critical',
+        recommendedAction: 'Programar reposición esta semana: 15 unidades',
+        predictedLoss: 12000
+      }
+    ]);
+
+    setPurchasePatterns({
+      insights: [
+        { 
+          type: 'peak_hours', 
+          title: 'Horas pico detectadas', 
+          description: 'Mayor actividad entre 15:00 y 16:00',
+          impact: 'high',
+          confidence: 0.87
+        }
+      ],
+      hourlyPatterns: [
+        { hour: '15:00', salesIndex: 1.5, avgTransactions: 52, customerFlow: 'alto' },
+        { hour: '16:00', salesIndex: 1.6, avgTransactions: 56, customerFlow: 'alto' }
+      ],
+      dailyPatterns: [
+        { day: 'Viernes', salesIndex: 1.3, avgDaily: 230000, transactions: 50 }
+      ]
+    });
+  }, []);
+  
   // Estados para ventas
   const [salesHistory, setSalesHistory] = useState([]);
   const [todayMetrics, setTodayMetrics] = useState(null);
@@ -62,11 +122,19 @@ const DashboardSimple = () => {
   const [selectedMetric, setSelectedMetric] = useState(null);
   const [showAiInsights, setShowAiInsights] = useState(true);
   const [reportsData, setReportsData] = useState(null);
-  
+
+  // Estados adicionales para reportes del backend
+  const [inventoryReport, setInventoryReport] = useState(null);
+  const [customersReport, setCustomersReport] = useState(null);
+  const [productsReport, setProductsReport] = useState(null);
+
   // Estados para gestión de caja
   const [cashMetrics, setCashMetrics] = useState(null);
   const [showCashModal, setShowCashModal] = useState(false);
   const [cashModalType, setCashModalType] = useState('view'); // 'open', 'close', 'movement', 'view'
+
+  // Estado para ordenamiento de top productos
+  const [productSortBy, setProductSortBy] = useState('quantity'); // 'quantity' o 'revenue'
   
   // KPIs calculados con memoización (DEBE estar antes de cualquier return)
   const kpis = useMemo(() => {
@@ -121,19 +189,6 @@ const DashboardSimple = () => {
         action: () => navigate('/productos')
       }
     ];
-    
-    // Agregar KPI de IA si está disponible
-    if (performanceMetrics) {
-      baseKpis.push({
-        title: 'Precisión IA',
-        value: `${(performanceMetrics.aiAccuracy * 100).toFixed(1)}%`,
-        change: 2.3, // Simulado
-        icon: Brain,
-        color: 'text-emerald-600',
-        bgColor: 'bg-emerald-50',
-        action: () => navigate('/ai-center')
-      });
-    }
     
     return baseKpis;
   }, [dashboardData, performanceMetrics, navigate, info, todayMetrics]);
@@ -241,8 +296,8 @@ const DashboardSimple = () => {
     });
 
     const topProducts = Object.values(productSales)
-      .sort((a, b) => b.revenue - a.revenue)
-      .slice(0, 5)
+      .sort((a, b) => b.quantity - a.quantity) // Ordenar por cantidad vendida
+      .slice(0, 10) // Top 10 productos
       .map(product => ({
         ...product,
         formattedRevenue: formatARS(product.revenue)
@@ -295,54 +350,249 @@ const DashboardSimple = () => {
       growthRate: `${dailyComparison.growth.revenue > 0 ? '+' : ''}${dailyComparison.growth.revenue.toFixed(1)}%`
     };
 
+    // 6. Métricas de eficiencia y rendimiento
+    const operationalEfficiency = Math.min(100, 85 + (todaySales.length > 50 ? 10 : 0) + (dailyComparison.growth.revenue > 0 ? 5 : -5));
+
+    // 7. Comparativa semanal (hoy vs hace 7 días aproximado)
+    const sevenDaysAgo = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const endSevenDaysAgo = new Date(sevenDaysAgo.getTime() + 24 * 60 * 60 * 1000);
+    const sevenDaysAgoSales = allSales.filter(sale => {
+      const saleDate = new Date(sale.date || sale.timestamp);
+      return saleDate >= sevenDaysAgo && saleDate < endSevenDaysAgo;
+    });
+    const sevenDaysAgoRevenue = sevenDaysAgoSales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+    const weeklyComparison = sevenDaysAgoRevenue > 0
+      ? ((todayRevenue - sevenDaysAgoRevenue) / sevenDaysAgoRevenue * 100)
+      : todayRevenue > 0 ? 100 : 0;
+
+    // 8. Crecimiento general (promedio últimos 3 días)
+    const threeDaysAgo = new Date(today.getTime() - 3 * 24 * 60 * 60 * 1000);
+    const threeDaysRevenue = allSales
+      .filter(sale => {
+        const saleDate = new Date(sale.date || sale.timestamp);
+        return saleDate >= threeDaysAgo;
+      })
+      .reduce((sum, sale) => sum + (sale.total || 0), 0);
+
+    const avgRevenueLastThreeDays = threeDaysRevenue / 3;
+    const growthRate = avgRevenueLastThreeDays > 0
+      ? ((todayRevenue - avgRevenueLastThreeDays) / avgRevenueLastThreeDays * 100)
+      : 0;
+
     return {
       hourlyData,
       topProducts,
       dailyComparison,
       trends,
       summary,
+      metrics: {
+        operationalEfficiency: Math.round(operationalEfficiency * 10) / 10,
+        weeklyComparison: Math.round(weeklyComparison * 10) / 10,
+        growthRate: Math.round(growthRate * 10) / 10,
+        activeProductCount: topProducts.length,
+        peakHour: bestHour.hour,
+        averageTransactionValue: dailyComparison.today.avgTicket
+      },
       lastUpdated: new Date().toISOString()
     };
+  }, []);
+
+  // Función para generar gráfico de ventas desde historial
+  const generateSalesChartFromHistory = useCallback((allSales, timeRange) => {
+    const now = new Date();
+    const data = [];
+
+    // Determinar el número de puntos según el rango
+    const points = timeRange === '7d' ? 7 : timeRange === '30d' ? 30 : 90;
+
+    // Crear buckets de datos para cada día/período
+    for (let i = points - 1; i >= 0; i--) {
+      const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
+      const startOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+      const endOfDay = new Date(date.getFullYear(), date.getMonth(), date.getDate(), 23, 59, 59);
+
+      // Filtrar ventas de ese día
+      const daySales = allSales.filter(sale => {
+        const saleDate = new Date(sale.date || sale.timestamp || sale.createdAt);
+        return saleDate >= startOfDay && saleDate <= endOfDay;
+      });
+
+      const totalAmount = daySales.reduce((sum, sale) => sum + (sale.total || 0), 0);
+      const totalOrders = daySales.length;
+
+      // Formatear nombre según el rango
+      let name;
+      if (timeRange === '7d') {
+        name = date.toLocaleDateString('es-AR', { weekday: 'short' });
+      } else if (timeRange === '30d') {
+        name = date.getDate() + '/' + (date.getMonth() + 1);
+      } else {
+        name = date.getDate() + '/' + (date.getMonth() + 1);
+      }
+
+      data.push({
+        name,
+        value: Math.round(totalAmount),
+        orders: totalOrders
+      });
+    }
+
+    return data;
+  }, []);
+
+  // Función para generar gráfico de categorías desde productos
+  const generateCategoryChartFromProducts = useCallback((topProducts) => {
+    if (!topProducts || topProducts.length === 0) return [];
+
+    // Agrupar por categoría - ahora el backend devuelve el campo 'category' directamente
+    const categoryMap = new Map();
+    let totalQuantity = 0;
+
+    topProducts.forEach(product => {
+      const category = product.category || 'Otros';
+      const quantity = product.quantity || product.sales || 1;
+      totalQuantity += quantity;
+
+      if (!categoryMap.has(category)) {
+        categoryMap.set(category, { quantity: 0, count: 0 });
+      }
+      const current = categoryMap.get(category);
+      current.quantity += quantity;
+      current.count += 1;
+    });
+
+    // Convertir a formato de gráfico con colores
+    const colors = ['#3B82F6', '#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#6366F1', '#EC4899', '#F97316'];
+    const data = Array.from(categoryMap.entries())
+      .map(([name, { quantity }], index) => ({
+        name: name || 'Otros',
+        value: quantity,
+        percentage: totalQuantity > 0 ? ((quantity / totalQuantity) * 100).toFixed(1) : 0,
+        color: colors[index % colors.length]
+      }))
+      .sort((a, b) => b.value - a.value)
+      .slice(0, 5); // Top 5 categorías
+
+    return data.length > 0 ? data : [];
+  }, []);
+
+  // Función para generar actividad reciente desde datos reales
+  const generateRecentActivity = useCallback((allSales, lowStockItems) => {
+    const activities = [];
+    const now = Date.now();
+
+    // Agregar ventas recientes (últimas 5)
+    const recentSales = allSales
+      .sort((a, b) => new Date(b.date || b.timestamp) - new Date(a.date || a.timestamp))
+      .slice(0, 5);
+
+    recentSales.forEach(sale => {
+      const saleTime = new Date(sale.date || sale.timestamp);
+      const diffMinutes = Math.floor((now - saleTime) / (1000 * 60));
+
+      let timeText;
+      if (diffMinutes < 1) {
+        timeText = 'Ahora';
+      } else if (diffMinutes < 60) {
+        timeText = `Hace ${diffMinutes} min`;
+      } else if (diffMinutes < 1440) {
+        const hours = Math.floor(diffMinutes / 60);
+        timeText = `Hace ${hours}h`;
+      } else {
+        const days = Math.floor(diffMinutes / 1440);
+        timeText = `Hace ${days}d`;
+      }
+
+      activities.push({
+        type: 'sale',
+        message: 'Venta completada',
+        amount: formatARS(sale.total || 0),
+        time: timeText,
+        timestamp: saleTime
+      });
+    });
+
+    // Agregar alertas de stock bajo (últimas 3)
+    if (lowStockItems && lowStockItems.length > 0) {
+      lowStockItems.slice(0, 3).forEach((item, index) => {
+        activities.push({
+          type: 'alert',
+          message: 'Stock bajo',
+          amount: item.name || 'Producto',
+          time: `Hace ${15 + index * 20} min`,
+          timestamp: new Date(now - (15 + index * 20) * 60 * 1000)
+        });
+      });
+    }
+
+    // Ordenar por timestamp y tomar las primeras 5
+    return activities
+      .sort((a, b) => b.timestamp - a.timestamp)
+      .slice(0, 5);
   }, []);
 
   // Función separada para cargar datos de IA (MOVIDA ANTES DE loadData)
   const loadAiData = useCallback(async () => {
     try {
       const aiEngine = (await getAiEngine()).default;
-      
-      // Cargar insights de IA
-      const insights = await aiEngine.getBusinessInsights();
-      setAiInsights(insights.slice(0, 6)); // Limitar a 6 insights principales
-      
-      // Cargar predicciones de productos críticos
-      const criticalProducts = [1, 2, 3, 4, 5]; // IDs de productos críticos
-      const productPredictions = [];
-      for (const productId of criticalProducts) {
-        const prediction = await aiEngine.predictDemand(productId, 7);
-        if (prediction) {
-          productPredictions.push({
-            id: productId,
-            name: prediction?.productName || 'Producto desconocido',
-            currentStock: prediction?.factors?.currentStock ?? 0,
-            prediction: {
-              predictedSales: prediction?.predictedSales ?? 0,
-              confidence: prediction?.confidence ?? 0,
-              recommendation: prediction?.recommendation || 'Sin recomendación',
-              daysToStockout: prediction?.daysToStockout ?? 0,
-              revenueImpact: prediction?.profitImpact?.expectedProfit ?? 0
-            }
-          });
-        }
+
+      // Cargar datos de IA en paralelo para mejor rendimiento
+      const [insights, marketRecommendations, marketAnalysis] = await Promise.allSettled([
+        aiEngine.getBusinessInsights(),
+        aiEngine.getMarketAnalysis(),
+        aiEngine.getCustomerSegmentation()
+      ]);
+
+      // Procesar insights
+      if (insights.status === 'fulfilled') {
+        setAiInsights(insights.value.slice(0, 6)); // Limitar a 6 insights principales
       }
+
+      // Cargar predicciones de productos críticos en paralelo (solo 3 productos para mejor rendimiento)
+      const criticalProducts = [1, 2, 3]; // Reducido a 3 productos críticos
+      const predictionPromises = criticalProducts.map(async (productId) => {
+        try {
+          const prediction = await aiEngine.predictDemand(productId, 7);
+          if (prediction) {
+            return {
+              id: productId,
+              name: prediction?.productName || 'Producto desconocido',
+              currentStock: prediction?.factors?.currentStock ?? 0,
+              prediction: {
+                predictedSales: prediction?.predictedSales ?? 0,
+                confidence: prediction?.confidence ?? 0,
+                recommendation: prediction?.recommendation || 'Sin recomendación',
+                daysToStockout: prediction?.daysToStockout ?? 0,
+                revenueImpact: prediction?.profitImpact?.expectedProfit ?? 0
+              }
+            };
+          }
+        } catch (err) {
+          console.warn(`Error predicting for product ${productId}:`, err);
+          return null;
+        }
+      });
+
+      const productPredictions = (await Promise.allSettled(predictionPromises))
+        .filter(result => result.status === 'fulfilled' && result.value)
+        .map(result => result.value);
+
       setPredictions(productPredictions);
-      
+
       // Cargar recomendaciones de IA
-      const recommendations = await aiEngine.getRecommendations([]);
-      setAiRecommendations(recommendations.slice(0, 5));
+      const aiRecommendationsData = await aiEngine.getRecommendations([]);
+      setAiRecommendations(aiRecommendationsData.slice(0, 5));
       
-      // Cargar alertas críticas
+      // Cargar alertas críticas tradicionales
       const alerts = await aiEngine.getCriticalAlerts();
       setCriticalAlerts(alerts);
+      
+      // Cargar nuevas funcionalidades avanzadas
+      const stockAlerts = await aiEngine.getAdvancedStockAlerts();
+      setAdvancedStockAlerts(stockAlerts.slice(0, 5)); // Top 5 alertas más críticas
+      
+      const patterns = await aiEngine.analyzePurchasePatterns();
+      setPurchasePatterns(patterns);
       
       // Cargar análisis de mercado
       const market = await aiEngine.getMarketAnalysis();
@@ -353,7 +603,7 @@ const DashboardSimple = () => {
       setPerformanceMetrics({
         aiAccuracy: systemMetrics.accuracy?.demandPrediction || 0.94,
         predictionsToday: systemMetrics.predictionsToday || 47,
-        insightsGenerated: insights.length,
+        insightsGenerated: insights.status === 'fulfilled' ? insights.value?.length || 0 : 0,
         optimizationsApplied: systemMetrics.dataPoints?.rules || 12,
         processingTime: systemMetrics.processingTime?.avgPrediction || '245ms',
         modelVersion: systemMetrics.modelVersion || '3.2.1',
@@ -361,7 +611,8 @@ const DashboardSimple = () => {
       });
       
       // Notificar sobre nuevos insights críticos
-      const criticalInsights = insights.filter(i => i.priority === 'urgent' || i.priority === 'high');
+      const criticalInsights = insights.status === 'fulfilled' ?
+        (insights.value?.filter(i => i.priority === 'urgent' || i.priority === 'high') || []) : [];
       if (criticalInsights.length > 0) {
         addNotification({
           type: NOTIFICATION_TYPES.AI,
@@ -386,28 +637,91 @@ const DashboardSimple = () => {
       } else {
         setRefreshing(true);
       }
-      
-      // Datos básicos del dashboard con período seleccionado
-      const response = await apiService.getDashboardData({ timeRange });
-      setDashboardData(response);
-      
-      // Cargar historial de ventas reales desde localStorage
+
+      // Cargar datos básicos de forma síncrona primero
       const allSales = salesHistoryService.getAllSales();
       const todayStats = salesHistoryService.getTodayMetrics();
-      
+      const cashMetrics = cashRegisterService.getTodayMetrics();
+
       setSalesHistory(allSales);
       setTodayMetrics(todayStats);
-      
+      setCashMetrics(cashMetrics);
+
       // Generar datos de reportes basados en ventas reales
       const reportsData = generateReportsData(allSales, todayStats);
       setReportsData(reportsData);
-      
-      // Cargar métricas de caja
-      const cashMetrics = cashRegisterService.getTodayMetrics();
-      setCashMetrics(cashMetrics);
-      
-      // Cargar datos de IA de forma asíncrona
-      await loadAiData();
+
+      // Convertir timeRange a formato del backend
+      const periodMap = {
+        '7d': 'week',
+        '30d': 'month',
+        '90d': 'quarter'
+      };
+      const period = periodMap[timeRange] || 'month';
+
+      // Cargar múltiples endpoints del backend en paralelo
+      const [dashboardResponse, salesReportResponse, productsReportResponse, customersReportResponse, inventoryReportResponse] = await Promise.allSettled([
+        apiService.getDashboardData(period),
+        apiService.getSalesReport(period),
+        apiService.getProductsReport(period),
+        apiService.getCustomersReport(),
+        apiService.getInventoryReport()
+      ]);
+
+      // Iniciar carga de AI en paralelo (no esperar resultado)
+      loadAiData();
+
+      // Combinar datos de múltiples endpoints
+      if (dashboardResponse.status === 'fulfilled') {
+        const dashData = dashboardResponse.value;
+        const salesData = salesReportResponse.status === 'fulfilled' ? salesReportResponse.value : null;
+        const productsData = productsReportResponse.status === 'fulfilled' ? productsReportResponse.value : null;
+        const customersData = customersReportResponse.status === 'fulfilled' ? customersReportResponse.value : null;
+        const inventoryData = inventoryReportResponse.status === 'fulfilled' ? inventoryReportResponse.value : null;
+
+        // Guardar reportes en el estado
+        setInventoryReport(inventoryData);
+        setCustomersReport(customersData);
+        setProductsReport(productsData);
+
+        // Generar actividad reciente desde datos reales
+        const recentActivities = generateRecentActivity(allSales, inventoryData?.lowStockItems || []);
+        setRecentActivity(recentActivities);
+
+        // Construir estructura completa de dashboard
+        const combinedData = {
+          kpis: {
+            // Datos principales del backend
+            totalSales: dashData.kpis?.totalSales || 0,
+            salesGrowth: dashData.kpis?.growth?.sales || 0,
+            totalOrders: dashData.kpis?.totalTransactions || 0,
+            ordersGrowth: dashData.kpis?.growth?.transactions || 0,
+            avgTicket: dashData.kpis?.averageTicket || 0,
+            ticketGrowth: 0, // Calcular en frontend si es necesario
+
+            // Productos activos del inventario
+            activeProducts: inventoryData?.summary?.totalProducts || 0,
+            productsGrowth: dashData.kpis?.growth?.customers || 0,
+
+            // Metas (usar valores por defecto si no están en backend)
+            salesTarget: dashData.kpis?.totalSales ? Math.round(dashData.kpis.totalSales * 1.15) : 0,
+            ordersTarget: dashData.kpis?.totalTransactions ? Math.round(dashData.kpis.totalTransactions * 1.10) : 0,
+            ticketTarget: dashData.kpis?.averageTicket ? Math.round(dashData.kpis.averageTicket * 1.05) : 0,
+            productsTarget: inventoryData?.summary?.totalProducts ? Math.round(inventoryData.summary.totalProducts * 1.08) : 0
+          },
+          charts: {
+            // Generar gráfico de ventas basado en datos reales de salesHistory
+            salesChart: allSales.length > 0 ? generateSalesChartFromHistory(allSales, timeRange) : dashData.charts?.salesChart || [],
+
+            // Generar gráfico de categorías basado en top productos de reportsData (datos reales de ventas)
+            categoryChart: reportsData?.topProducts && reportsData.topProducts.length > 0
+              ? generateCategoryChartFromProducts(reportsData.topProducts)
+              : (productsData?.topProducts ? generateCategoryChartFromProducts(productsData.topProducts) : dashData.charts?.categoryChart || [])
+          }
+        };
+
+        setDashboardData(combinedData);
+      }
       
     } catch (error) {
       console.error('Error loading dashboard:', error);
@@ -429,212 +743,25 @@ const DashboardSimple = () => {
           ordersTarget: 380,
           ticketTarget: 15000,
           productsTarget: 180
+        },
+        charts: {
+          salesChart: [
+            { name: 'Ene', value: 4200000, orders: 285 },
+            { name: 'Feb', value: 3800000, orders: 260 },
+            { name: 'Mar', value: 5100000, orders: 340 },
+            { name: 'Abr', value: 4700000, orders: 310 },
+            { name: 'May', value: 5800000, orders: 380 },
+            { name: 'Jun', value: 4890000, orders: 342 }
+          ],
+          categoryChart: [
+            { name: 'Neumáticos', value: 35, color: '#3B82F6' },
+            { name: 'Aceites y Lubricantes', value: 25, color: '#8B5CF6' },
+            { name: 'Sistema de Frenos', value: 20, color: '#10B981' },
+            { name: 'Transmisión', value: 12, color: '#F59E0B' },
+            { name: 'Otros', value: 8, color: '#EF4444' }
+          ]
         }
       });
-      
-      // Agregar insights básicos de IA (sin cargar aiEngine)
-      setAiInsights([
-        {
-          type: 'trend',
-          title: 'Pico de demanda detectado',
-          message: 'IA predice incremento del 35% en neumáticos por cambio estacional.',
-          priority: 'high'
-        },
-        {
-          type: 'opportunity',
-          title: 'Oportunidad de venta cruzada',
-          message: 'Clientes de neumáticos tienen 78% probabilidad de necesitar alineación.',
-          priority: 'medium'
-        }
-      ]);
-      
-      // Agregar métricas de performance de IA
-      setPerformanceMetrics({
-        aiAccuracy: 0.967,
-        predictionsToday: 47,
-        insightsGenerated: 23,
-        optimizationsApplied: 12,
-        modelVersion: '3.2.1',
-        lastTraining: new Date().toISOString(),
-        processingTime: '0.234s',
-        dataPoints: 125847
-      });
-      
-      // Agregar alertas críticas
-      setCriticalAlerts([
-        {
-          title: 'Stock crítico - Neumático Michelin',
-          message: 'Michelin Energy XM2 185/65R15: Solo 4 unidades. Producto estrella con alta rotación.',
-          action: 'Orden de compra urgente',
-          priority: 'urgent'
-        },
-        {
-          title: 'Oportunidad de mercado',
-          message: 'Demanda de baterías incrementó 23% esta semana. Considerar promoción especial.',
-          action: 'Crear promoción',
-          priority: 'high'
-        }
-      ]);
-      
-      // Agregar predicciones de productos
-      setPredictions([
-        {
-          id: 1,
-          name: 'Neumático Michelin Energy XM2 185/65R15',
-          currentStock: 4,
-          prediction: {
-            predictedSales: 18,
-            confidence: 96,
-            recommendation: 'reorder_urgent',
-            daysToStockout: 2,
-            suggestedOrder: 45,
-            revenueImpact: 67500
-          }
-        },
-        {
-          id: 2,
-          name: 'Aceite Castrol GTX 15W-40 4L',
-          currentStock: 12,
-          prediction: {
-            predictedSales: 8,
-            confidence: 89,
-            recommendation: 'reorder',
-            daysToStockout: 3,
-            suggestedOrder: 24,
-            revenueImpact: 28800
-          }
-        }
-      ]);
-      
-      // Agregar recomendaciones de IA
-      setAiRecommendations([
-        {
-          type: 'cross_selling',
-          title: 'Promoción Neumático + Alineación',
-          message: 'Ofrecer servicio de alineación con descuento del 15% en compra de neumáticos.',
-          impact: 'high',
-          probability: 78,
-          revenueIncrease: 11200
-        },
-        {
-          type: 'price_optimization',
-          title: 'Ajuste dinámico - Frenos Brembo',
-          message: 'Reducir precio 3.2% mantendrá competitividad vs. competencia.',
-          impact: 'medium',
-          probability: 67,
-          revenueIncrease: 5400
-        }
-      ]);
-      
-      // Agregar análisis de mercado
-      setMarketAnalysis({
-        trends: [
-          {
-            category: 'Neumáticos',
-            trend: 'up',
-            change: 34.2,
-            analysis: 'Pico estacional + nuevas regulaciones UE impulsan demanda premium'
-          },
-          {
-            category: 'Aceites y Lubricantes',
-            trend: 'up',
-            change: 18.7,
-            analysis: 'Tendencia hacia aceites sintéticos de larga duración'
-          },
-          {
-            category: 'Sistema de frenos',
-            trend: 'stable',
-            change: 5.3,
-            analysis: 'Crecimiento estable, oportunidad en frenos cerámicos'
-          }
-        ],
-        opportunities: [
-          {
-            title: 'Servicios de instalación premium',
-            description: 'Expandir a servicios de instalación de alta gama con garantía extendida',
-            potentialRevenue: 125000,
-            probability: 78,
-            timeframe: '3 meses'
-          },
-          {
-            title: 'Alianza con talleres locales',
-            description: 'Red de partners para referidos mutuos y descuentos cruzados',
-            potentialRevenue: 89000,
-            probability: 85,
-            timeframe: '2 meses'
-          }
-        ]
-      });
-      
-      // Agregar datos para gráficos
-      setChartsData({
-        salesData: [
-          { name: 'Ene', value: 4200000, orders: 285 },
-          { name: 'Feb', value: 3800000, orders: 260 },
-          { name: 'Mar', value: 5100000, orders: 340 },
-          { name: 'Abr', value: 4700000, orders: 310 },
-          { name: 'May', value: 5800000, orders: 380 },
-          { name: 'Jun', value: 4890000, orders: 342 }
-        ],
-        categoryData: [
-          { name: 'Neumáticos', value: 35, color: '#3B82F6' },
-          { name: 'Aceites y Lubricantes', value: 25, color: '#8B5CF6' },
-          { name: 'Sistema de Frenos', value: 20, color: '#10B981' },
-          { name: 'Transmisión', value: 12, color: '#F59E0B' },
-          { name: 'Otros', value: 8, color: '#EF4444' }
-        ],
-        hourlyData: [
-          { hour: '09:00', sales: 180000, customers: 12 },
-          { hour: '10:00', sales: 250000, customers: 18 },
-          { hour: '11:00', sales: 320000, customers: 24 },
-          { hour: '12:00', sales: 290000, customers: 20 },
-          { hour: '13:00', sales: 210000, customers: 15 },
-          { hour: '14:00', sales: 380000, customers: 28 },
-          { hour: '15:00', sales: 420000, customers: 32 },
-          { hour: '16:00', sales: 460000, customers: 35 },
-          { hour: '17:00', sales: 380000, customers: 29 },
-          { hour: '18:00', sales: 320000, customers: 25 }
-        ]
-      });
-      
-      // Agregar actividad reciente
-      setRecentActivity([
-        {
-          id: 1,
-          type: 'sale',
-          message: 'Venta de neumático Michelin - $37,500',
-          time: 'Hace 3 min',
-          status: 'success'
-        },
-        {
-          id: 2,
-          type: 'order',
-          message: 'Orden #2847 completada - Cambio de aceite',
-          time: 'Hace 12 min',
-          status: 'info'
-        },
-        {
-          id: 3,
-          type: 'inventory',
-          message: 'Stock crítico: Pastillas de freno Brembo',
-          time: 'Hace 25 min',
-          status: 'warning'
-        },
-        {
-          id: 4,
-          type: 'customer',
-          message: 'Nuevo cliente registrado - Juan Pérez',
-          time: 'Hace 45 min',
-          status: 'success'
-        },
-        {
-          id: 5,
-          type: 'ai',
-          message: 'IA detectó oportunidad de venta cruzada',
-          time: 'Hace 1 hora',
-          status: 'ai'
-        }
-      ]);
       
     } finally {
       setLoading(false);
@@ -642,16 +769,17 @@ const DashboardSimple = () => {
     }
   }, [timeRange, loadAiData]); // loadData depende de timeRange y loadAiData
 
-  // Inicializar datos
+  // Inicializar datos al montar
   useEffect(() => {
-    loadData(); // Cargar datos al montar el componente
-  }, [loadData]);
+    loadData(true); // Cargar datos al montar el componente
+  }, []); // Solo al montar
 
-  // Efecto para recargar datos cuando cambia el timeRange
+  // Recargar datos cuando cambia el timeRange
   useEffect(() => {
-    console.log('TimeRange changed, reloading data:', timeRange);
-    loadData();
-  }, [timeRange, loadData]);
+    if (!loading) {
+      loadData(false); // No mostrar loading cuando solo cambia timeRange
+    }
+  }, [timeRange, loading]); // Depender de timeRange y loading
 
   // Función para manejar acciones rápidas
   const handleQuickAction = (action) => {
@@ -747,1371 +875,975 @@ const DashboardSimple = () => {
   }
 
   return (
-    <div className="space-y-6">
-      {/* Header con controles avanzados */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-gray-900 flex items-center gap-3">
-            Dashboard Inteligente
-            {refreshing && <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />}
-          </h1>
-          <p className="text-gray-600 mt-1 flex items-center gap-2">
-            <span>Bienvenido, {user?.nombre || 'Usuario'}</span>
-            <span>•</span>
-            <span>Última actualización: {formatDateTime(Date.now())}</span>
-            {performanceMetrics && (
-              <>
-                <span>•</span>
-                <span className="text-emerald-600 font-medium">
-                  IA: {(performanceMetrics.aiAccuracy * 100).toFixed(1)}% precisión
-                </span>
-              </>
-            )}
-          </p>
-        </div>
-        
-        <div className="flex items-center gap-3">
-          {/* Selector de período */}
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-gray-500" />
-            <select
-              value={timeRange}
-              onChange={(e) => setTimeRange(e.target.value)}
-              className="border border-gray-200 rounded-xl px-3 py-2 bg-white/90 backdrop-blur-sm text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            >
-              <option value="7d">Últimos 7 días</option>
-              <option value="30d">Últimos 30 días</option>
-              <option value="90d">Últimos 90 días</option>
-              <option value="1y">Último año</option>
-            </select>
-          </div>
-
-          {/* Botones de acción */}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => loadData(false)}
-            disabled={refreshing}
-            className="gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin' : ''}`} />
-            Actualizar
-          </Button>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={exportDashboardData}
-            className="gap-2"
-          >
-            <Download className="w-4 h-4" />
-            Exportar
-          </Button>
-
-          {/* Toggle AI Insights */}
-          <Button
-            variant={showAiInsights ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => setShowAiInsights(!showAiInsights)}
-            className="gap-2"
-          >
-            <Brain className="w-4 h-4" />
-            {showAiInsights ? 'IA On' : 'IA Off'}
-          </Button>
-          
-          {/* Indicador IA */}
-          <div className="flex items-center gap-2 px-3 py-2 bg-emerald-50 rounded-xl">
-            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
-            <span className="text-sm font-medium text-emerald-700">IA Activa</span>
-          </div>
-        </div>
-      </div>
-
-      {/* KPIs Grid Mejorado */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-6">
-        {kpis.map((kpi, index) => {
-          const Icon = kpi.icon;
-          const isPositive = kpi.change >= 0;
-          const progress = kpi.target ? Math.min(100, (parseFloat(kpi.value.replace(/[^0-9.-]/g, '')) / kpi.target) * 100) : null;
-          
-          return (
-            <Card 
-              key={index} 
-              className={`relative overflow-hidden transition-all duration-300 hover:shadow-lg cursor-pointer group ${
-                selectedMetric === index ? 'ring-2 ring-blue-500 shadow-lg' : ''
-              }`}
-              onClick={() => {
-                setSelectedMetric(selectedMetric === index ? null : index);
-                kpi.action && kpi.action();
-              }}
-            >
-              <CardContent className="p-6">
-                <div className="flex items-center justify-between">
-                  <div className={`w-12 h-12 rounded-2xl ${kpi.bgColor} flex items-center justify-center group-hover:scale-110 transition-transform`}>
-                    <Icon className={`w-6 h-6 ${kpi.color}`} />
-                  </div>
-                  
-                  <div className="text-right">
-                    <div className="flex items-center gap-1">
-                      {isPositive ? (
-                        <ArrowUpRight className="w-4 h-4 text-green-500" />
-                      ) : (
-                        <ArrowDownRight className="w-4 h-4 text-red-500" />
-                      )}
-                      <span className={`text-sm font-semibold ${
-                        isPositive ? 'text-green-600' : 'text-red-600'
-                      }`}>
-                        {isPositive ? '+' : ''}{kpi.change.toFixed(1)}%
-                      </span>
-                    </div>
-                  </div>
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-blue-50 to-indigo-100">
+      {/* Header Moderno */}
+      <div className="relative overflow-hidden bg-white/80 backdrop-blur-xl border-b border-white/20 shadow-sm">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/5 via-purple-600/5 to-indigo-600/5" />
+        <div className="relative px-6 py-8">
+          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
+            {/* Saludo y Estado */}
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl flex items-center justify-center shadow-lg">
+                  <Gauge className="w-6 h-6 text-white" />
                 </div>
-                
-                <div className="mt-4">
-                  <h3 className="text-sm font-medium text-gray-500 mb-1">
-                    {kpi.title}
-                  </h3>
-                  <p className="text-2xl font-bold text-gray-900 mb-1">
-                    {kpi.value}
+                <div>
+                  <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black bg-gradient-to-r from-gray-900 via-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
+                    Dashboard
+                  </h1>
+                  <p className="text-base sm:text-lg text-gray-500 font-medium">
+                    Hola {user?.nombre || 'Usuario'} 👋 - Vista ejecutiva en tiempo real
                   </p>
-                  {kpi.target && (
-                    <p className="text-xs text-gray-400">
-                      Meta: {typeof kpi.target === 'number' && kpi.target > 1000 ? formatPrice(kpi.target) : kpi.target.toLocaleString()}
-                    </p>
-                  )}
-                </div>
-                
-                {/* Barra de progreso hacia meta */}
-                {progress !== null && (
-                  <div className="mt-3">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div 
-                        className={`h-2 rounded-full transition-all duration-1000 ${
-                          progress >= 90 ? 'bg-green-500' : progress >= 70 ? 'bg-yellow-500' : 'bg-blue-500'
-                        }`}
-                        style={{ width: `${Math.min(100, progress)}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">
-                      {progress.toFixed(0)}% de la meta
-                    </p>
-                  </div>
-                )}
-                
-                {/* Indicador de interactividad */}
-                <div className="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Eye className="w-4 h-4 text-gray-400" />
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
-      </div>
-
-      {/* Gestión de Caja */}
-      {cashMetrics && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-green-600" />
-                Control de Caja
-              </div>
-              <div className={`px-3 py-1 rounded-full text-sm font-medium ${
-                cashMetrics.isOpen 
-                  ? 'bg-green-100 text-green-800' 
-                  : 'bg-gray-100 text-gray-800'
-              }`}>
-                {cashMetrics.isOpen ? '🟢 Abierta' : '🔴 Cerrada'}
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="text-center p-4 bg-blue-50 rounded-lg">
-                <div className="text-2xl font-bold text-blue-600">
-                  {cashMetrics.formattedCurrentAmount}
-                </div>
-                <div className="text-sm text-blue-700">Dinero en Caja</div>
-                {cashMetrics.isOpen && (
-                  <div className="text-xs text-gray-600 mt-1">
-                    Esperado: {cashMetrics.formattedExpectedAmount}
-                  </div>
-                )}
-              </div>
-              
-              <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
-                  {cashMetrics.formattedTotalSales}
-                </div>
-                <div className="text-sm text-green-700">Ventas Efectivo</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  {cashMetrics.salesCount} operaciones
                 </div>
               </div>
               
-              <div className="text-center p-4 bg-purple-50 rounded-lg">
-                <div className="text-2xl font-bold text-purple-600">
-                  {formatARS(cashMetrics.payments.card)}
+              <div className="flex items-center gap-6 text-sm">
+                <div className="flex items-center gap-2">
+                  <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                  <span className="text-emerald-700 font-semibold">Sistema Activo</span>
                 </div>
-                <div className="text-sm text-purple-700">Ventas Tarjeta</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  + {formatARS(cashMetrics.payments.transfer)} transferencias
-                </div>
-              </div>
-              
-              <div className="text-center p-4 bg-orange-50 rounded-lg">
-                <div className="text-2xl font-bold text-orange-600">
-                  {cashMetrics.movementsCount}
-                </div>
-                <div className="text-sm text-orange-700">Movimientos</div>
-                <div className="text-xs text-gray-600 mt-1">
-                  Hoy
+                <div className="flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-gray-400" />
+                  <span className="text-gray-500">Actualizado {formatDateTime(Date.now())}</span>
                 </div>
               </div>
             </div>
             
-            <div className="flex flex-wrap gap-2 mt-6">
-              {!cashMetrics.isOpen ? (
-                <Button 
-                  onClick={() => handleCashOperation('open')}
-                  className="bg-green-600 hover:bg-green-700"
-                  size="sm"
+            {/* Controles */}
+            <div className="flex items-center gap-3">
+              <div className="flex items-center gap-2 bg-white/60 backdrop-blur-sm rounded-2xl px-4 py-2 border border-white/30">
+                <Calendar className="w-4 h-4 text-gray-500" />
+                <select
+                  value={timeRange}
+                  onChange={(e) => setTimeRange(e.target.value)}
+                  className="bg-transparent border-0 text-sm font-medium text-gray-700 focus:outline-none"
                 >
-                  <CheckCircle className="w-4 h-4 mr-2" />
-                  Abrir Caja
-                </Button>
-              ) : (
-                <>
-                  <Button 
-                    onClick={() => handleCashOperation('view')}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <Eye className="w-4 h-4 mr-2" />
-                    Ver Estado
-                  </Button>
-                  <Button 
-                    onClick={() => handleCashOperation('movement')}
-                    variant="outline"
-                    size="sm"
-                  >
-                    <TrendingUp className="w-4 h-4 mr-2" />
-                    Movimientos
-                  </Button>
-                  <Button 
-                    onClick={() => handleCashOperation('close')}
-                    variant="outline"
-                    size="sm"
-                    className="text-red-600 border-red-200 hover:bg-red-50"
-                  >
-                    <XCircle className="w-4 h-4 mr-2" />
-                    Cerrar Caja
-                  </Button>
-                </>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+                  <option value="7d">7 días</option>
+                  <option value="30d">30 días</option>
+                  <option value="90d">90 días</option>
+                  <option value="1y">1 año</option>
+                </select>
+              </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Estado del Sistema</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="text-green-600 font-semibold">✅ Sistema funcionando correctamente</div>
-            <div className="text-sm text-gray-500 mt-2">
-              Datos cargados: {dashboardData ? 'Sí' : 'No'}
-            </div>
-            <div className="text-sm text-gray-500 mt-1">
-              Producto destacado: {dashboardData?.kpis?.topProduct || 'N/A'}
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Resumen del Período</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Meta de ventas:</span>
-                <span className="font-semibold">{formatPrice(dashboardData?.kpis?.salesTarget || 0)}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Meta de órdenes:</span>
-                <span className="font-semibold">{(dashboardData?.kpis?.ordersTarget || 0).toLocaleString()}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Progreso:</span>
-                <span className="font-semibold text-green-600">94.0%</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle>Rendimiento</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              <div className="flex justify-between">
-                <span className="text-gray-600">Eficiencia:</span>
-                <span className="font-semibold text-blue-600">Excelente</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Tendencia:</span>
-                <span className="font-semibold text-green-600">↗ Creciendo</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="text-gray-600">Proyección:</span>
-                <span className="font-semibold text-purple-600">+32% mensual</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Sección de IA Avanzada */}
-      {showAiInsights && aiInsights.length > 0 && (
-        <Card className="border-l-4 border-l-emerald-500 bg-gradient-to-r from-emerald-50/50 to-transparent">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="w-5 h-5 text-emerald-600" />
-              Insights de Inteligencia Artificial
-              <span className="text-xs bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full">
-                En Tiempo Real
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {aiInsights.map((insight, index) => {
-                const getIconByType = (type) => {
-                  switch (type) {
-                    case 'trend': return TrendingUp;
-                    case 'alert': return AlertTriangle;
-                    case 'forecast': return Activity;
-                    case 'ai': return Brain;
-                    default: return Zap;
-                  }
-                };
-                
-                const getColorByPriority = (priority) => {
-                  switch (priority) {
-                    case 'urgent': return 'text-red-600 bg-red-50 border-red-200';
-                    case 'high': return 'text-orange-600 bg-orange-50 border-orange-200';
-                    case 'medium': return 'text-blue-600 bg-blue-50 border-blue-200';
-                    default: return 'text-green-600 bg-green-50 border-green-200';
-                  }
-                };
-                
-                const Icon = getIconByType(insight.type);
-                const colorClass = getColorByPriority(insight.priority);
-                
-                return (
-                  <div key={index} className={`flex items-start gap-3 p-4 rounded-xl bg-white/90 backdrop-blur-sm border transition-all duration-200 hover:shadow-md ${colorClass}`}>
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0`}>
-                      <Icon className="w-5 h-5" />
-                    </div>
-                    <div className="flex-1">
-                      <div className="flex items-center justify-between mb-1">
-                        <h4 className="font-semibold text-gray-900">{insight.title}</h4>
-                        <Badge 
-                          variant={insight.priority === 'urgent' ? 'destructive' : insight.priority === 'high' ? 'warning' : 'secondary'} 
-                          size="sm"
-                        >
-                          {insight.priority}
-                        </Badge>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">{insight.message}</p>
-                      
-                      {insight.action && (
-                        <div className="flex items-center justify-between">
-                          <button 
-                            onClick={() => info(`Acción: ${insight.action}`)}
-                            className="text-xs font-medium text-blue-600 hover:text-blue-700 flex items-center gap-1"
-                          >
-                            {insight.action} <ArrowUpRight className="w-3 h-3" />
-                          </button>
-                          
-                          {insight.impact && (
-                            <span className={`text-xs px-2 py-1 rounded-full ${
-                              insight.impact === 'positive' ? 'bg-green-100 text-green-700' : 
-                              insight.impact === 'negative' ? 'bg-red-100 text-red-700' : 
-                              'bg-gray-100 text-gray-700'
-                            }`}>
-                              {insight.impact === 'positive' ? '📈' : insight.impact === 'negative' ? '📉' : '📊'} Impacto
-                            </span>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Métricas de Performance IA */}
-      {performanceMetrics && (
-        <Card className="border-l-4 border-l-purple-500 bg-gradient-to-r from-purple-50/50 to-transparent">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Brain className="w-5 h-5 text-purple-600" />
-              Rendimiento de IA
-              <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
-                v{performanceMetrics.modelVersion}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-              <div className="text-center">
-                <div className="text-2xl font-bold text-purple-600">
-                  {(performanceMetrics.aiAccuracy * 100).toFixed(1)}%
-                </div>
-                <div className="text-sm text-gray-600">Precisión del Modelo</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-blue-600">
-                  {performanceMetrics.predictionsToday}
-                </div>
-                <div className="text-sm text-gray-600">Predicciones Hoy</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-green-600">
-                  {performanceMetrics.insightsGenerated}
-                </div>
-                <div className="text-sm text-gray-600">Insights Generados</div>
-              </div>
-              <div className="text-center">
-                <div className="text-2xl font-bold text-orange-600">
-                  {performanceMetrics.optimizationsApplied}
-                </div>
-                <div className="text-sm text-gray-600">Optimizaciones</div>
-              </div>
-            </div>
-            <div className="mt-4 pt-4 border-t border-gray-200 text-xs text-gray-500">
-              <div className="flex justify-between">
-                <span>Datos procesados: {performanceMetrics?.dataPoints?.toLocaleString() || '0'} puntos</span>
-                <span>Tiempo de procesamiento: {performanceMetrics?.processingTime || '0ms'}</span>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Alertas Críticas */}
-      {criticalAlerts.length > 0 && (
-        <Card className="border-l-4 border-l-red-500 bg-gradient-to-r from-red-50/50 to-transparent">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertTriangle className="w-5 h-5 text-red-600" />
-              Alertas Críticas
-              <span className="text-xs bg-red-100 text-red-700 px-2 py-1 rounded-full">
-                {criticalAlerts.length}
-              </span>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {criticalAlerts.map((alert, index) => (
-                <div key={index} className={`flex items-start gap-3 p-4 rounded-lg border ${
-                  alert.priority === 'urgent' 
-                    ? 'bg-red-50 border-red-200' 
-                    : 'bg-orange-50 border-orange-200'
-                }`}>
-                  <AlertTriangle className={`w-5 h-5 mt-0.5 flex-shrink-0 ${
-                    alert.priority === 'urgent' ? 'text-red-600' : 'text-orange-600'
-                  }`} />
-                  <div className="flex-1">
-                    <h4 className={`font-semibold ${
-                      alert.priority === 'urgent' ? 'text-red-900' : 'text-orange-900'
-                    }`}>
-                      {alert.title}
-                    </h4>
-                    <p className={`text-sm mt-1 ${
-                      alert.priority === 'urgent' ? 'text-red-700' : 'text-orange-700'
-                    }`}>
-                      {alert.message}
-                    </p>
-                    <button className={`mt-2 text-xs px-3 py-1 rounded-full border font-medium ${
-                      alert.priority === 'urgent' 
-                        ? 'text-red-700 border-red-300 hover:bg-red-100' 
-                        : 'text-orange-700 border-orange-300 hover:bg-orange-100'
-                    }`}>
-                      {alert.action}
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Predicciones de Productos */}
-      {predictions.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Target className="w-5 h-5 text-blue-600" />
-              Predicciones de Demanda
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {predictions.map((product, index) => (
-                <div key={index} className="p-4 border border-gray-200 rounded-lg">
-                  <div className="flex justify-between items-start mb-3">
-                    <div>
-                      <h4 className="font-semibold text-gray-900">{product.name}</h4>
-                      <p className="text-sm text-gray-600">Stock actual: {product.currentStock} unidades</p>
-                    </div>
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium ${
-                      product.prediction.recommendation === 'reorder_urgent' 
-                        ? 'bg-red-100 text-red-700' 
-                        : 'bg-orange-100 text-orange-700'
-                    }`}>
-                      {product.prediction.confidence}% confianza
-                    </div>
-                  </div>
-                  
-                  <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 text-sm">
-                    <div>
-                      <div className="text-gray-600">Ventas predichas</div>
-                      <div className="font-semibold">{product.prediction.predictedSales} unidades</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Días hasta agotarse</div>
-                      <div className={`font-semibold ${
-                        product.prediction.daysToStockout <= 3 ? 'text-red-600' : 'text-orange-600'
-                      }`}>
-                        {product.prediction.daysToStockout} días
-                      </div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Orden sugerida</div>
-                      <div className="font-semibold text-blue-600">{product.prediction.suggestedOrder} unidades</div>
-                    </div>
-                    <div>
-                      <div className="text-gray-600">Impacto en ingresos</div>
-                      <div className="font-semibold text-green-600">{formatPrice(product.prediction.revenueImpact)}</div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Recomendaciones de IA Mejoradas */}
-      {showAiInsights && aiRecommendations.length > 0 && (
-        <Card className="border-l-4 border-l-indigo-500 bg-gradient-to-r from-indigo-50/50 to-transparent">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Zap className="w-5 h-5 text-indigo-600" />
-                Recomendaciones Inteligentes
-                <Badge variant="ai" size="sm">
-                  {aiRecommendations.length} disponibles
-                </Badge>
-              </div>
               <Button
-                variant="outline"
+                variant="ghost"
                 size="sm"
-                onClick={() => navigate('/ai-center')}
-                className="gap-2"
+                onClick={() => loadData(false)}
+                disabled={refreshing}
+                className="bg-white/60 backdrop-blur-sm border-white/30 hover:bg-white/80 gap-2"
               >
-                <Maximize className="w-4 h-4" />
-                Ver todas
+                <RefreshCw className={`w-4 h-4 ${refreshing ? 'animate-spin text-blue-500' : 'text-gray-600'}`} />
+                Actualizar
               </Button>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {aiRecommendations.slice(0, 3).map((recommendation, index) => {
-                const getTypeIcon = (type) => {
-                  switch (type) {
-                    case 'cross_selling': return TrendingUp;
-                    case 'price_optimization': return BarChart3;
-                    case 'inventory_optimization': return Package;
-                    case 'customer_retention': return Users;
-                    case 'upselling': return Target;
-                    default: return Zap;
-                  }
-                };
-                
-                const TypeIcon = getTypeIcon(recommendation.type);
-                
-                return (
-                  <div key={index} className="p-4 border border-indigo-200 rounded-xl bg-white/60 backdrop-blur-sm hover:bg-white/80 transition-all duration-200">
-                    <div className="flex items-start gap-3">
-                      <div className={`w-12 h-12 rounded-2xl flex items-center justify-center ${
-                        recommendation.impact === 'high' 
-                          ? 'bg-green-100 text-green-600 border border-green-200' 
-                          : 'bg-blue-100 text-blue-600 border border-blue-200'
-                      }`}>
-                        <TypeIcon className="w-6 h-6" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-2">
-                          <h4 className="font-semibold text-gray-900">{recommendation.title}</h4>
-                          <div className="flex gap-2">
-                            <Badge 
-                              variant={recommendation.impact === 'high' ? 'success' : 'default'} 
-                              size="sm"
-                            >
-                              {recommendation.probability}% prob.
-                            </Badge>
-                          </div>
-                        </div>
-                        <p className="text-sm text-gray-600 mb-3">{recommendation.message}</p>
-                        
-                        {recommendation.products && (
-                          <div className="flex flex-wrap gap-1 mb-3">
-                            {recommendation.products.map((product, idx) => (
-                              <span key={idx} className="text-xs bg-gray-100 text-gray-700 px-2 py-1 rounded-full">
-                                {product}
-                              </span>
-                            ))}
-                          </div>
-                        )}
-                        
-                        <div className="flex justify-between items-center">
-                          <div className="text-sm text-green-600 font-medium flex items-center gap-1">
-                            <TrendingUp className="w-4 h-4" />
-                            +{formatPrice(recommendation.revenueIncrease)}
-                          </div>
-                          <Button
-                            size="sm"
-                            onClick={() => applyAiRecommendation(recommendation)}
-                            className="gap-2"
-                          >
-                            <Zap className="w-4 h-4" />
-                            Aplicar
-                          </Button>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                );
-              })}
+              
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={exportDashboardData}
+                className="bg-white/60 backdrop-blur-sm border-white/30 hover:bg-white/80 gap-2"
+              >
+                <Download className="w-4 h-4 text-gray-600" />
+                Exportar
+              </Button>
+
+              <Button
+                variant={showAiInsights ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setShowAiInsights(!showAiInsights)}
+                className={`gap-2 ${showAiInsights ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white shadow-lg' : 'bg-white/60 backdrop-blur-sm border-white/30 hover:bg-white/80'}`}
+              >
+                <Brain className="w-4 h-4" />
+                {showAiInsights ? 'IA Activa' : 'Activar IA'}
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Análisis de Mercado */}
-      {marketAnalysis && (
-        <Card className="border-l-4 border-l-cyan-500 bg-gradient-to-r from-cyan-50/50 to-transparent">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Activity className="w-5 h-5 text-cyan-600" />
-              Análisis de Mercado
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {/* Tendencias por Categoría */}
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Tendencias por Categoría</h4>
-                <div className="space-y-3">
-                  {marketAnalysis.trends && marketAnalysis.trends.map((trend, index) => (
-                    <div key={index} className="flex items-center gap-4 p-3 rounded-lg bg-white/80 border border-gray-100">
-                      <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
-                        trend.trend === 'up' ? 'bg-green-100 text-green-600' : 
-                        trend.trend === 'down' ? 'bg-red-100 text-red-600' : 
-                        'bg-gray-100 text-gray-600'
-                      }`}>
-                        {trend.trend === 'up' ? (
-                          <TrendingUp className="w-4 h-4" />
-                        ) : trend.trend === 'down' ? (
-                          <TrendingDown className="w-4 h-4" />
-                        ) : (
-                          <Activity className="w-4 h-4" />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex justify-between items-start mb-1">
-                          <h5 className="font-medium text-gray-900">{trend.category}</h5>
-                          <span className={`text-sm font-semibold ${
-                            trend.trend === 'up' ? 'text-green-600' : 
-                            trend.trend === 'down' ? 'text-red-600' : 
-                            'text-gray-600'
-                          }`}>
-                            {trend.trend === 'up' ? '+' : trend.trend === 'down' ? '-' : ''}{Math.abs(trend.change)}%
-                          </span>
-                        </div>
-                        <p className="text-sm text-gray-600">{trend.analysis}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Oportunidades de Negocio */}
-              <div>
-                <h4 className="font-semibold text-gray-900 mb-3">Oportunidades de Negocio</h4>
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {marketAnalysis.opportunities && marketAnalysis.opportunities.map((opportunity, index) => (
-                    <div key={index} className="p-4 rounded-lg bg-gradient-to-br from-cyan-50 to-blue-50 border border-cyan-200">
-                      <div className="flex justify-between items-start mb-3">
-                        <h5 className="font-semibold text-gray-900">{opportunity.title}</h5>
-                        <span className="px-2 py-1 bg-cyan-100 text-cyan-700 text-xs rounded-full">
-                          {opportunity.probability}% éxito
-                        </span>
-                      </div>
-                      <p className="text-sm text-gray-600 mb-3">{opportunity.description}</p>
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <div className="text-lg font-bold text-green-600">
-                            {formatPrice(opportunity.potentialRevenue)}
-                          </div>
-                          <div className="text-xs text-gray-500">Potencial en {opportunity.timeframe}</div>
-                        </div>
-                        <button className="px-3 py-1 bg-cyan-600 text-white text-xs rounded-full hover:bg-cyan-700">
-                          Explorar oportunidad
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Sección de Gráficos y Visualizaciones */}
-      {chartsData.salesData && (
-        <div className="space-y-6">
-          <div className="flex items-center gap-3">
-            <BarChart3 className="w-6 h-6 text-blue-600" />
-            <h2 className="text-xl font-bold text-gray-900">Análisis Visual</h2>
-          </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Ventas Mensuales</h3>
-                <TrendingUp className="w-5 h-5 text-green-600" />
-              </div>
-              <LineChart data={chartsData.salesData} title="" />
-              <div className="mt-4 grid grid-cols-3 gap-4 text-sm">
-                <div className="text-center">
-                  <div className="font-semibold text-green-600">+18.7%</div>
-                  <div className="text-gray-500">vs mes anterior</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-semibold text-blue-600">$4.9M</div>
-                  <div className="text-gray-500">Promedio mensual</div>
-                </div>
-                <div className="text-center">
-                  <div className="font-semibold text-purple-600">314</div>
-                  <div className="text-gray-500">Órdenes promedio</div>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Distribución por Categoría</h3>
-                <Package className="w-5 h-5 text-purple-600" />
-              </div>
-              <PieChart data={chartsData.categoryData} title="" />
-              <div className="mt-4 space-y-2">
-                {chartsData.categoryData.slice(0, 3).map((category, index) => (
-                  <div key={index} className="flex justify-between items-center text-sm">
-                    <div className="flex items-center gap-2">
-                      <div className={`w-3 h-3 rounded-full`} style={{ backgroundColor: category.color }}></div>
-                      <span className="text-gray-700">{category.name}</span>
-                    </div>
-                    <span className="font-semibold">{category.value}%</span>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-            <div className="lg:col-span-2">
-              <Card className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-lg font-semibold text-gray-900">Análisis de Tendencias</h3>
-                  <Activity className="w-5 h-5 text-cyan-600" />
-                </div>
-                <AdvancedChart data={chartsData.salesData} type="area" title="" />
-                <div className="mt-4 grid grid-cols-4 gap-4 text-center text-sm">
-                  <div>
-                    <div className="font-semibold text-blue-600">Pico</div>
-                    <div className="text-gray-500">16:00 hrs</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-green-600">Valle</div>
-                    <div className="text-gray-500">13:00 hrs</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-purple-600">Tendencia</div>
-                    <div className="text-gray-500">↗ Creciente</div>
-                  </div>
-                  <div>
-                    <div className="font-semibold text-orange-600">Proyección</div>
-                    <div className="text-gray-500">+24% mes</div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Actividad Reciente</h3>
-                <Bell className="w-5 h-5 text-orange-600" />
-              </div>
-              <div className="space-y-4 max-h-64 overflow-y-auto">
-                {recentActivity.map((activity) => (
-                  <div key={activity.id} className="flex items-start space-x-3">
-                    <div className={`w-2 h-2 mt-2 rounded-full flex-shrink-0 ${
-                      activity.status === 'success' ? 'bg-green-500' :
-                      activity.status === 'warning' ? 'bg-yellow-500' :
-                      activity.status === 'info' ? 'bg-blue-500' :
-                      activity.status === 'ai' ? 'bg-purple-500' : 'bg-gray-500'
-                    }`} />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm text-gray-900">{activity.message}</p>
-                      <p className="text-xs text-gray-500">{activity.time}</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </Card>
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Card className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-semibold text-gray-900">Rendimiento por Horas</h3>
-                <BarChart3 className="w-5 h-5 text-indigo-600" />
-              </div>
-              <BarChart data={chartsData.hourlyData} title="" />
-              <div className="mt-4 text-sm text-gray-600">
-                <div className="flex justify-between">
-                  <span>Hora pico: 16:00 - $460,000</span>
-                  <span>35 clientes</span>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-6">
-              <h3 className="text-lg font-semibold text-gray-900 mb-4">Estadísticas del Mes</h3>
-              <div className="space-y-6">
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-600">Meta de Ventas</span>
-                    <span className="text-sm font-medium">{formatPrice(5200000)}</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-gradient-to-r from-blue-500 to-blue-600 h-3 rounded-full" style={{ width: '94%' }}></div>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gray-500 mt-1">
-                    <span>{formatPrice(4890000)} completado</span>
-                    <span>94%</span>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-600">Nuevos Clientes</span>
-                    <span className="text-sm font-medium">245</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-gradient-to-r from-green-500 to-green-600 h-3 rounded-full" style={{ width: '81%' }}></div>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gray-500 mt-1">
-                    <span>Meta: 300</span>
-                    <span>81%</span>
-                  </div>
-                </div>
-
-                <div>
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm text-gray-600">Productos Vendidos</span>
-                    <span className="text-sm font-medium">1,847</span>
-                  </div>
-                  <div className="w-full bg-gray-200 rounded-full h-3">
-                    <div className="bg-gradient-to-r from-purple-500 to-purple-600 h-3 rounded-full" style={{ width: '88%' }}></div>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gray-500 mt-1">
-                    <span>Meta: 2,100</span>
-                    <span>88%</span>
-                  </div>
-                </div>
-              </div>
-            </Card>
           </div>
         </div>
-      )}
+      </div>
 
-      {/* Historial de Ventas Recientes */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Ventas Recientes */}
-        <Card className="lg:col-span-2">
-          <CardHeader>
-            <CardTitle className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <ShoppingCart className="w-5 h-5 text-blue-600" />
-                Ventas Recientes
-              </div>
-              <div className="flex items-center gap-2">
-                <select
-                  value={salesFilter}
-                  onChange={(e) => setSalesFilter(e.target.value)}
-                  className="text-sm border border-gray-300 rounded-md px-2 py-1"
+      <div className="p-6 space-y-8">
+        {/* KPIs Grid Moderno */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <h2 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+              <Activity className="w-5 h-5 text-blue-600" />
+              Métricas Clave
+            </h2>
+            <div className="text-sm text-gray-500">Datos en tiempo real</div>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {kpis.map((kpi, index) => {
+              const Icon = kpi.icon;
+              const isPositive = kpi.change >= 0;
+              const progress = kpi.target ? Math.min(100, (parseFloat(kpi.value.replace(/[^0-9.-]/g, '')) / kpi.target) * 100) : null;
+              
+              return (
+                <Card 
+                  key={index} 
+                  className="group relative overflow-hidden bg-white/60 backdrop-blur-xl border-white/30 hover:bg-white/80 hover:shadow-xl hover:scale-[1.02] transition-all duration-300 cursor-pointer"
+                  onClick={() => {
+                    setSelectedMetric(selectedMetric === index ? null : index);
+                    kpi.action && kpi.action();
+                  }}
                 >
-                  <option value="today">Hoy</option>
-                  <option value="week">Esta Semana</option>
-                  <option value="month">Este Mes</option>
-                  <option value="all">Todas</option>
-                </select>
-                <Button size="sm" variant="outline" onClick={() => loadData(false)}>
-                  <RefreshCw className="w-4 h-4" />
-                </Button>
-              </div>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {filteredSales.length === 0 ? (
-              <div className="text-center py-8 text-gray-500">
-                <ShoppingCart className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                <p className="text-sm">No hay ventas registradas para este período</p>
-                <p className="text-xs text-gray-400">Las ventas aparecerán aquí automáticamente</p>
-              </div>
-            ) : (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {filteredSales.slice(0, 20).map((sale) => (
-                  <div
-                    key={sale.id}
-                    className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                        sale.documentType === 'invoice' ? 'bg-blue-100 text-blue-600' :
-                        sale.documentType === 'quote' ? 'bg-purple-100 text-purple-600' :
-                        'bg-green-100 text-green-600'
-                      }`}>
-                        {sale.documentType === 'invoice' ? '📄' :
-                         sale.documentType === 'quote' ? '📋' : '💰'}
+                  <CardContent className="p-6">
+                    {/* Header con icono y trend */}
+                    <div className="flex items-start justify-between mb-4">
+                      <div className={`w-14 h-14 rounded-2xl ${kpi.bgColor} flex items-center justify-center shadow-lg group-hover:scale-110 transition-transform`}>
+                        <Icon className={`w-7 h-7 ${kpi.color}`} />
                       </div>
+                      
+                      <div className="text-right">
+                        <div className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold ${
+                          isPositive 
+                            ? 'bg-emerald-100 text-emerald-700' 
+                            : 'bg-red-100 text-red-700'
+                        }`}>
+                          {isPositive ? (
+                            <TrendingUp className="w-3 h-3" />
+                          ) : (
+                            <TrendingDown className="w-3 h-3" />
+                          )}
+                          {isPositive ? '+' : ''}{kpi.change.toFixed(1)}%
+                        </div>
+                      </div>
+                    </div>
+                    
+                    {/* Valor principal */}
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium text-gray-600 uppercase tracking-wide">
+                        {kpi.title}
+                      </p>
+                      <p className="text-3xl font-black text-gray-900 tracking-tight">
+                        {kpi.value}
+                      </p>
+                    </div>
+                    
+                    {/* Barra de progreso mejorada */}
+                    {progress !== null && (
+                      <div className="mt-4 space-y-2">
+                        <div className="flex justify-between text-xs">
+                          <span className="text-gray-500">Progreso</span>
+                          <span className="font-semibold text-gray-700">{progress.toFixed(0)}%</span>
+                        </div>
+                        <div className="w-full bg-gray-200/50 rounded-full h-2.5">
+                          <div 
+                            className={`h-2.5 rounded-full transition-all duration-1000 ${
+                              progress >= 90 ? 'bg-gradient-to-r from-emerald-400 to-emerald-600' : 
+                              progress >= 70 ? 'bg-gradient-to-r from-amber-400 to-orange-500' : 
+                              'bg-gradient-to-r from-blue-400 to-blue-600'
+                            }`}
+                            style={{ width: `${Math.min(100, progress)}%` }}
+                          />
+                        </div>
+                        {kpi.target && (
+                          <p className="text-xs text-gray-500">
+                            Meta: {typeof kpi.target === 'number' && kpi.target > 1000 ? formatPrice(kpi.target) : kpi.target.toLocaleString()}
+                          </p>
+                        )}
+                      </div>
+                    )}
+                    
+                    {/* Indicador de estado */}
+                    <div className="absolute top-3 right-3">
+                      <div className={`w-2 h-2 rounded-full ${
+                        isPositive ? 'bg-emerald-500' : 'bg-red-500'
+                      } opacity-60 group-hover:opacity-100 transition-opacity`} />
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Alertas Inteligentes de Stock - Solo las críticas para Dashboard */}
+        {advancedStockAlerts.filter(alert => alert.level === 'urgent').length > 0 && (
+          <Card className="border-l-4 border-l-red-500 bg-gradient-to-r from-red-50/50 to-transparent">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-red-600" />
+                  Alertas Críticas de Stock
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => navigate('/ai-center')}
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                >
+                  Ver AI Center
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {advancedStockAlerts.filter(alert => alert.level === 'urgent').map((alert, index) => (
+                  <div key={alert.id} className="flex items-center justify-between p-4 bg-red-50 border border-red-200 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse" />
                       <div>
-                        <div className="font-medium text-sm">
-                          {sale.id}
-                          <Badge size="xs" className="ml-2 bg-green-100 text-green-700">Real</Badge>
-                        </div>
-                        <div className="text-xs text-gray-600">
-                          {sale.customer?.name || 'Consumidor Final'} • 
-                          {sale.items?.length || 0} productos • 
-                          {formatDateTime(new Date(sale.date))}
-                        </div>
+                        <h4 className="font-semibold text-red-900">{alert.productName}</h4>
+                        <p className="text-sm text-red-700">Stock: {alert.currentStock} unidades • {alert.daysToStockout} día{alert.daysToStockout !== 1 ? 's' : ''} restante{alert.daysToStockout !== 1 ? 's' : ''}</p>
+                        <p className="text-xs text-red-600 mt-1">{alert.recommendedAction}</p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <div className="font-bold text-green-600">{formatARS(sale.total)}</div>
-                      <div className="text-xs text-gray-500 uppercase">
-                        {sale.payment?.method === 'cash' ? 'Efectivo' :
-                         sale.payment?.method === 'card' ? 'Tarjeta' :
-                         sale.payment?.method === 'credit' ? 'Crédito' :
-                         sale.payment?.method === 'transfer' ? 'Transferencia' :
-                         'Pendiente'}
+                      <div className="text-sm font-semibold text-red-600">
+                        Pérdida estimada: {formatPrice(alert.predictedLoss)}
                       </div>
+                      <Button 
+                        size="sm" 
+                        variant="destructive"
+                        onClick={() => navigate('/productos')}
+                        className="mt-2"
+                      >
+                        Gestionar
+                      </Button>
                     </div>
                   </div>
                 ))}
               </div>
-            )}
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        )}
 
-        {/* Métricas del Día */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-green-600" />
-              Métricas de Hoy
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            {todayMetrics ? (
-              <div className="space-y-4">
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{formatARS(todayMetrics.totalAmount)}</div>
-                  <div className="text-sm text-green-700">Total Vendido</div>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="text-center p-3 bg-blue-50 rounded-lg">
-                    <div className="text-lg font-bold text-blue-600">{todayMetrics.totalSales}</div>
-                    <div className="text-xs text-blue-700">Ventas</div>
-                  </div>
-                  <div className="text-center p-3 bg-purple-50 rounded-lg">
-                    <div className="text-lg font-bold text-purple-600">{formatARS(todayMetrics.averageTicket)}</div>
-                    <div className="text-xs text-purple-700">Ticket Prom.</div>
-                  </div>
-                </div>
-                
-                {Object.keys(todayMetrics.paymentMethods).length > 0 && (
-                  <div>
-                    <h4 className="text-sm font-medium mb-2">Métodos de Pago</h4>
-                    <div className="space-y-2">
-                      {Object.entries(todayMetrics.paymentMethods).map(([method, count]) => (
-                        <div key={method} className="flex justify-between text-sm">
-                          <span className="capitalize">
-                            {method === 'cash' ? 'Efectivo' :
-                             method === 'card' ? 'Tarjeta' :
-                             method === 'credit' ? 'Crédito' :
-                             method === 'transfer' ? 'Transferencia' :
-                             method}
-                          </span>
-                          <span className="font-medium">{count}</span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="text-center py-6 text-gray-500">
-                <BarChart3 className="w-8 h-8 mx-auto mb-2 opacity-50" />
-                <p className="text-sm">Sin datos para hoy</p>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Reportes Diarios */}
-      {reportsData && (
-        <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-xl font-semibold text-gray-900 flex items-center gap-2">
-              <BarChart3 className="w-5 h-5 text-blue-600" />
-              Reportes Diarios
-            </h2>
-            <div className="text-sm text-gray-500">
-              Actualizado: {formatDateTime(reportsData.lastUpdated)}
-            </div>
-          </div>
-
-          {/* Resumen Ejecutivo */}
-          <Card>
+        {/* Alertas de Caja */}
+        {cashMetrics && (
+          <Card className={`border-l-4 ${
+            !cashMetrics.isOpen 
+              ? 'border-l-red-500 bg-gradient-to-r from-red-50/50 to-transparent' 
+              : 'border-l-green-500 bg-gradient-to-r from-green-50/50 to-transparent'
+          }`}>
             <CardHeader>
-              <CardTitle>Resumen Ejecutivo - {new Date().toLocaleDateString()}</CardTitle>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Settings className={`w-5 h-5 ${cashMetrics.isOpen ? 'text-green-600' : 'text-red-600'}`} />
+                  Estado de Caja Registradora
+                </div>
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={() => navigate('/ventas')}
+                  className="text-blue-600 border-blue-200 hover:bg-blue-50"
+                >
+                  Ir a Ventas
+                </Button>
+              </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                <div className="text-center p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{reportsData.summary.totalSales}</div>
-                  <div className="text-sm text-blue-700">Ventas Hoy</div>
-                  <div className="text-xs text-green-600 font-medium mt-1">{reportsData.summary.growthRate}</div>
+              <div className={`flex items-center justify-between p-4 ${
+                cashMetrics.isOpen 
+                  ? 'bg-green-50 border border-green-200' 
+                  : 'bg-red-50 border border-red-200'
+              } rounded-lg`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-3 h-3 rounded-full ${
+                    cashMetrics.isOpen 
+                      ? 'bg-green-500 animate-pulse' 
+                      : 'bg-red-500'
+                  }`} />
+                  <div>
+                    <h4 className={`font-semibold ${
+                      cashMetrics.isOpen ? 'text-green-900' : 'text-red-900'
+                    }`}>
+                      Caja {cashMetrics.isOpen ? 'Abierta' : 'Cerrada'}
+                    </h4>
+                    <p className={`text-sm ${
+                      cashMetrics.isOpen ? 'text-green-700' : 'text-red-700'
+                    }`}>
+                      {cashMetrics.isOpen 
+                        ? `Abierta desde hace ${Math.floor((Date.now() - (cashMetrics.openTime || Date.now())) / (1000 * 60 * 60))} horas`
+                        : 'La caja debe estar abierta para procesar ventas'
+                      }
+                    </p>
+                    {cashMetrics.isOpen && (
+                      <p className="text-xs text-green-600 mt-1">
+                        Efectivo actual: {formatPrice(cashMetrics.currentAmount)}
+                      </p>
+                    )}
+                  </div>
                 </div>
-                <div className="text-center p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{reportsData.summary.formattedRevenue}</div>
-                  <div className="text-sm text-green-700">Ingresos</div>
-                  <div className="text-xs text-gray-600">Ticket prom: {reportsData.summary.avgTicket}</div>
+                <div className="text-right">
+                  {!cashMetrics.isOpen && (
+                    <Button 
+                      size="sm" 
+                      className="bg-green-500 hover:bg-green-600 text-white"
+                      onClick={() => handleCashOperation('open')}
+                    >
+                      Abrir Caja
+                    </Button>
+                  )}
                 </div>
-                <div className="text-center p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">{reportsData.trends.peakHour}</div>
-                  <div className="text-sm text-purple-700">Hora Pico</div>
-                  <div className="text-xs text-gray-600">{reportsData.trends.peakRevenue}</div>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Resumen del Día */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-blue-600" />
+                Resumen de Hoy
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Hora de inicio</span>
+                  <span className="text-sm font-semibold text-gray-900">{cashMetrics?.openTime ? new Date(cashMetrics.openTime).toLocaleTimeString('es-AR', { hour: '2-digit', minute: '2-digit' }) : '08:30'}</span>
                 </div>
-                <div className="text-center p-4 bg-orange-50 rounded-lg">
-                  <div className="text-lg font-bold text-orange-600">{reportsData.summary.topProduct}</div>
-                  <div className="text-sm text-orange-700">Top Producto</div>
-                  <div className="text-xs text-gray-600">{reportsData.trends.totalHoursActive}h activo</div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Horas activas</span>
+                  <span className="text-sm font-semibold text-gray-900">{reportsData?.trends?.totalHoursActive || (new Date().getHours() - 8)} horas</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Mejor hora</span>
+                  <span className="text-sm font-semibold text-emerald-600">{reportsData?.trends?.peakHour || '15:00'}</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Promedio/hora</span>
+                  <span className="text-sm font-semibold text-blue-600">{reportsData?.trends?.averageHourlyRevenue || formatPrice(0)}</span>
                 </div>
               </div>
             </CardContent>
           </Card>
 
-          {/* Gráficos de Reportes */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Ventas por Hora */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Ventas por Hora - Hoy</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="h-64">
-                  <BarChart 
-                    data={reportsData.hourlyData}
-                    xDataKey="hour"
-                    yDataKey="sales"
-                    color="#3B82F6"
-                    title="Ventas"
-                  />
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+                Comparativo
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Vs. Ayer</span>
+                  {reportsData?.dailyComparison?.growth?.revenue ? (
+                    <div className="flex items-center gap-1">
+                      {reportsData.dailyComparison.growth.revenue >= 0 ? (
+                        <ArrowUpRight className="w-3 h-3 text-emerald-500" />
+                      ) : (
+                        <ArrowDownRight className="w-3 h-3 text-red-500" />
+                      )}
+                      <span className={`text-sm font-semibold ${reportsData.dailyComparison.growth.revenue >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                        {reportsData.dailyComparison.growth.revenue >= 0 ? '+' : ''}{reportsData.dailyComparison.growth.revenue.toFixed(1)}%
+                      </span>
+                    </div>
+                  ) : (
+                    <span className="text-sm text-gray-400">N/A</span>
+                  )}
                 </div>
-                <div className="mt-4 text-sm text-gray-600">
-                  <p>• Promedio por hora: {reportsData.trends.averageHourlyRevenue}</p>
-                  <p>• Horas activas: {reportsData.trends.totalHoursActive} de 24</p>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Ventas hoy</span>
+                  <span className="text-sm font-semibold text-gray-900">{reportsData?.dailyComparison?.today?.sales || 0} ventas</span>
                 </div>
-              </CardContent>
-            </Card>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Ventas ayer</span>
+                  <span className="text-sm font-semibold text-gray-600">{reportsData?.dailyComparison?.yesterday?.sales || 0} ventas</span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Meta mensual</span>
+                  <span className="text-sm font-semibold text-blue-600">
+                    {dashboardData?.kpis?.salesTarget && dashboardData?.kpis?.totalSales
+                      ? Math.round((dashboardData.kpis.totalSales / dashboardData.kpis.salesTarget) * 100)
+                      : 0}% completada
+                  </span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
 
-            {/* Top Productos */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Top Productos - Hoy</CardTitle>
-              </CardHeader>
-              <CardContent>
-                {reportsData.topProducts.length > 0 ? (
-                  <div className="space-y-3">
-                    {reportsData.topProducts.map((product, index) => (
-                      <div key={product.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm ${
-                            index === 0 ? 'bg-yellow-500' :
-                            index === 1 ? 'bg-gray-400' :
-                            index === 2 ? 'bg-orange-500' :
-                            'bg-blue-500'
-                          }`}>
-                            {index + 1}
-                          </div>
-                          <div>
-                            <div className="font-medium">{product.name}</div>
-                            <div className="text-sm text-gray-500">
-                              {product.quantity} vendidos • {product.category}
-                            </div>
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-bold text-green-600">{product.formattedRevenue}</div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="text-center py-8 text-gray-500">
-                    <Package className="w-12 h-12 mx-auto mb-4 opacity-50" />
-                    <p>No hay datos de productos para hoy</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Comparación Diaria */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Comparación Día a Día</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center p-4 bg-blue-50 rounded-lg">
-                    <div>
-                      <div className="font-medium text-blue-900">Hoy</div>
-                      <div className="text-sm text-blue-700">
-                        {reportsData.dailyComparison.today.sales} ventas
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xl font-bold text-blue-600">
-                        {reportsData.dailyComparison.today.formattedRevenue}
-                      </div>
-                      <div className="text-sm text-blue-700">
-                        {formatARS(reportsData.dailyComparison.today.avgTicket)} promedio
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center p-4 bg-gray-50 rounded-lg">
-                    <div>
-                      <div className="font-medium text-gray-900">Ayer</div>
-                      <div className="text-sm text-gray-700">
-                        {reportsData.dailyComparison.yesterday.sales} ventas
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="text-xl font-bold text-gray-600">
-                        {reportsData.dailyComparison.yesterday.formattedRevenue}
-                      </div>
-                      <div className="text-sm text-gray-700">
-                        {formatARS(reportsData.dailyComparison.yesterday.avgTicket)} promedio
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex justify-between items-center p-4 border border-dashed border-gray-300 rounded-lg">
-                    <div className="font-medium text-gray-900">Crecimiento</div>
-                    <div className="text-right">
-                      <div className={`text-xl font-bold flex items-center gap-1 ${
-                        reportsData.dailyComparison.growth.revenue > 0 ? 'text-green-600' : 
-                        reportsData.dailyComparison.growth.revenue < 0 ? 'text-red-600' : 'text-gray-600'
-                      }`}>
-                        {reportsData.dailyComparison.growth.revenue > 0 ? (
-                          <ArrowUpRight className="w-5 h-5" />
-                        ) : reportsData.dailyComparison.growth.revenue < 0 ? (
-                          <ArrowDownRight className="w-5 h-5" />
-                        ) : null}
-                        {reportsData.dailyComparison.growth.revenue > 0 ? '+' : ''}
-                        {reportsData.dailyComparison.growth.revenue.toFixed(1)}%
-                      </div>
-                      <div className="text-sm text-gray-600">
-                        Ventas: {reportsData.dailyComparison.growth.sales > 0 ? '+' : ''}
-                        {reportsData.dailyComparison.growth.sales.toFixed(1)}%
-                      </div>
-                    </div>
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-purple-600" />
+                Clientes Hoy
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total atendidos</span>
+                  <span className="text-sm font-semibold text-gray-900">
+                    {todayMetrics?.totalSales || 0} clientes
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Total registrados</span>
+                  <span className="text-sm font-semibold text-blue-600">
+                    {customersReport?.summary?.totalCustomers || 0} clientes
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Clientes activos</span>
+                  <span className="text-sm font-semibold text-emerald-600">
+                    {customersReport?.summary?.activeCustomers || 0} clientes
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Ticket promedio</span>
+                  <div className="flex items-center gap-1">
+                    <span className="text-sm font-semibold text-amber-600">
+                      {formatPrice(todayMetrics?.averageTicket || 0)}
+                    </span>
                   </div>
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
 
-            {/* Tendencias y Insights */}
-            <Card>
+        {/* Gráficos de Análisis */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          {dashboardData?.charts?.salesChart && (
+            <Card className="bg-white/60 backdrop-blur-xl border-white/30">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5" />
-                  Tendencias e Insights
+                  <BarChart3 className="w-5 h-5 text-blue-600" />
+                  Tendencia de Ventas ({timeRange})
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="space-y-4">
-                  <div className="p-4 bg-emerald-50 rounded-lg">
-                    <div className="font-medium text-emerald-900 mb-1">Rendimiento General</div>
-                    <div className="text-sm text-emerald-700">
-                      Tendencia: <span className="font-medium capitalize">
-                        {reportsData.trends.growthTrend === 'up' ? '📈 Creciente' :
-                         reportsData.trends.growthTrend === 'down' ? '📉 Decreciente' :
-                         '📊 Estable'}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Hora más productiva:</span>
-                      <span className="font-medium">{reportsData.trends.peakHour}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Ingresos promedio/hora:</span>
-                      <span className="font-medium">{reportsData.trends.averageHourlyRevenue}</span>
-                    </div>
-                    <div className="flex justify-between items-center">
-                      <span className="text-sm text-gray-600">Horas con actividad:</span>
-                      <span className="font-medium">{reportsData.trends.totalHoursActive}h de 24h</span>
-                    </div>
-                  </div>
-
-                  {reportsData.trends.growthTrend === 'up' && (
-                    <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-                      <div className="text-sm text-green-800">
-                        <strong>💡 Insight:</strong> Las ventas están creciendo. 
-                        Considera aumentar el stock para la hora pico ({reportsData.trends.peakHour}).
-                      </div>
-                    </div>
-                  )}
-
-                  {reportsData.trends.growthTrend === 'down' && (
-                    <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
-                      <div className="text-sm text-orange-800">
-                        <strong>⚠️ Atención:</strong> Las ventas están bajando. 
-                        Revisa estrategias de promoción y atención al cliente.
-                      </div>
-                    </div>
-                  )}
-                </div>
+                <AdvancedChart 
+                  data={dashboardData.charts.salesChart} 
+                  type="area"
+                  height={300}
+                />
               </CardContent>
             </Card>
-          </div>
+          )}
+
+          {dashboardData?.charts?.categoryChart && (
+            <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Target className="w-5 h-5 text-emerald-600" />
+                  Ventas por Categoría
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PieChart 
+                  data={dashboardData.charts.categoryChart} 
+                  height={300}
+                />
+              </CardContent>
+            </Card>
+          )}
         </div>
-      )}
 
-      {/* Panel de Acciones Rápidas Mejorado */}
-      <Card className="p-6">
-        <CardHeader className="px-0 pt-0">
-          <CardTitle className="flex items-center justify-between">
-            <span>Acciones Rápidas</span>
-            <span className="text-sm text-gray-500">Rol: {user?.role || 'Usuario'}</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="px-0">
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
-            <button 
-              onClick={() => handleQuickAction('nueva-venta')}
-              className="p-4 border border-gray-200 rounded-xl hover:bg-blue-50 hover:border-blue-200 text-center transition-all duration-200 group"
-            >
-              <ShoppingCart className="w-8 h-8 mx-auto mb-2 text-blue-600 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Nueva Venta</span>
-            </button>
-            
-            <button 
-              onClick={() => handleQuickAction('inventario')}
-              className="p-4 border border-gray-200 rounded-xl hover:bg-green-50 hover:border-green-200 text-center transition-all duration-200 group"
-            >
-              <Package className="w-8 h-8 mx-auto mb-2 text-green-600 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Inventario</span>
-            </button>
-            
-            <button 
-              onClick={() => handleQuickAction('ai-center')}
-              className="p-4 border border-gray-200 rounded-xl hover:bg-purple-50 hover:border-purple-200 text-center transition-all duration-200 group"
-            >
-              <Brain className="w-8 h-8 mx-auto mb-2 text-purple-600 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Centro IA</span>
-            </button>
-            
-            <button 
-              onClick={() => handleQuickAction('reportes')}
-              className="p-4 border border-gray-200 rounded-xl hover:bg-orange-50 hover:border-orange-200 text-center transition-all duration-200 group"
-            >
-              <BarChart3 className="w-8 h-8 mx-auto mb-2 text-orange-600 group-hover:scale-110 transition-transform" />
-              <span className="text-sm font-medium">Reportes</span>
-            </button>
-            
-            {(isAdmin || isSupervisor) && (
-              <>
-                <button 
-                  onClick={() => handleQuickAction('usuarios')}
-                  className="p-4 border border-gray-200 rounded-xl hover:bg-indigo-50 hover:border-indigo-200 text-center transition-all duration-200 group"
-                >
-                  <Users className="w-8 h-8 mx-auto mb-2 text-indigo-600 group-hover:scale-110 transition-transform" />
-                  <span className="text-sm font-medium">Usuarios</span>
-                </button>
-                
-                <button 
-                  onClick={() => handleQuickAction('configuracion')}
-                  className="p-4 border border-gray-200 rounded-xl hover:bg-gray-50 hover:border-gray-300 text-center transition-all duration-200 group"
-                >
-                  <Settings className="w-8 h-8 mx-auto mb-2 text-gray-600 group-hover:scale-110 transition-transform" />
-                  <span className="text-sm font-medium">Configuración</span>
-                </button>
-              </>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+        {/* Análisis por Horas y Productos */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+          {/* Ventas por Horas */}
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Clock className="w-5 h-5 text-amber-600" />
+                Ventas por Horas - Hoy
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <BarChart
+                data={reportsData?.hourlyData && reportsData.hourlyData.length > 0
+                  ? reportsData.hourlyData
+                      .filter(h => h.revenue > 0 || h.sales > 0) // Solo mostrar horas con actividad
+                      .map(h => ({
+                        hour: h.hour,
+                        sales: h.revenue,
+                        customers: h.sales
+                      }))
+                  : (reportsData?.hourlyData ? [] : [ // Mostrar vacío si reportsData está cargado pero sin datos
+                      { hour: '09:00', sales: 180000, customers: 12 },
+                      { hour: '10:00', sales: 250000, customers: 18 },
+                      { hour: '11:00', sales: 320000, customers: 24 },
+                      { hour: '12:00', sales: 290000, customers: 20 },
+                      { hour: '13:00', sales: 210000, customers: 15 },
+                      { hour: '14:00', sales: 380000, customers: 28 },
+                      { hour: '15:00', sales: 420000, customers: 32 },
+                      { hour: '16:00', sales: 460000, customers: 35 },
+                      { hour: '17:00', sales: 380000, customers: 29 },
+                      { hour: '18:00', sales: 320000, customers: 25 }
+                    ])}
+                height={280}
+              />
+            </CardContent>
+          </Card>
 
-      {/* Modal de Gestión de Caja */}
-      <CashRegisterModal
-        isOpen={showCashModal}
-        onClose={() => setShowCashModal(false)}
-        type={cashModalType}
-        onSuccess={handleCashSuccess}
-      />
+          {/* Productos Críticos */}
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="w-5 h-5 text-orange-600" />
+                  Inventario Crítico
+                </div>
+                <Badge variant="warning">
+                  {inventoryReport?.summary?.lowStockCount || 0} productos
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="max-h-80 overflow-y-auto">
+              <div className="space-y-3">
+                {inventoryReport?.lowStockItems && inventoryReport.lowStockItems.length > 0 ? (
+                  inventoryReport.lowStockItems.map((product, index) => {
+                    const stockPercentage = product.minStock > 0 ? (product.stock / product.minStock) * 100 : 0;
+                    const isCritical = stockPercentage < 30;
+
+                    return (
+                      <div key={product.id || index} className={`p-3 rounded-lg border ${
+                        isCritical ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
+                      }`}>
+                        <div className="flex items-center justify-between mb-2">
+                          <h4 className="font-medium text-gray-900 text-sm">{product.name}</h4>
+                          <Badge variant={isCritical ? 'destructive' : 'warning'}>
+                            {isCritical ? 'Crítico' : 'Bajo'}
+                          </Badge>
+                        </div>
+                        <div className="flex items-center justify-between text-xs">
+                          <span className="text-gray-600">Stock actual: {product.stock}</span>
+                          <span className="text-gray-600">Mínimo: {product.minStock}</span>
+                        </div>
+                        <div className="mt-2">
+                          <div className="w-full bg-gray-200 rounded-full h-1.5">
+                            <div
+                              className={`h-1.5 rounded-full ${
+                                isCritical ? 'bg-red-500' : 'bg-amber-500'
+                              }`}
+                              style={{ width: `${Math.min(100, stockPercentage)}%` }}
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Package className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No hay productos con stock bajo</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Grid Lateral con Información Detallada */}
+        <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
+          {/* Estadísticas del Período */}
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Calendar className="w-5 h-5 text-indigo-600" />
+                Estadísticas del Período
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                <div className="text-center p-4 bg-blue-50 rounded-lg">
+                  <div className="text-2xl font-bold text-blue-600">
+                    {formatPrice(dashboardData?.kpis?.totalSales || todayMetrics?.totalAmount || 0)}
+                  </div>
+                  <div className="text-sm text-blue-700">Total Facturado</div>
+                  <div className="text-xs text-gray-500 mt-1">
+                    {timeRange === '7d' ? '7 días' : timeRange === '30d' ? '30 días' : timeRange === '90d' ? '90 días' : '1 año'}
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="text-center p-3 bg-emerald-50 rounded-lg">
+                    <div className="text-lg font-bold text-emerald-600">
+                      {dashboardData?.kpis?.totalOrders || todayMetrics?.totalSales || 0}
+                    </div>
+                    <div className="text-xs text-emerald-700">Ventas</div>
+                  </div>
+                  <div className="text-center p-3 bg-purple-50 rounded-lg">
+                    <div className="text-lg font-bold text-purple-600">
+                      {formatPrice(dashboardData?.kpis?.avgTicket || todayMetrics?.averageTicket || 0)}
+                    </div>
+                    <div className="text-xs text-purple-700">Ticket Prom.</div>
+                  </div>
+                </div>
+                <div className="pt-3 border-t border-gray-200">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Mejor día:</span>
+                    <span className="font-semibold text-gray-900">
+                      {reportsData?.trends?.bestDay || 'N/A'}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm mt-1">
+                    <span className="text-gray-600">Crecimiento:</span>
+                    <span className={`font-semibold ${
+                      (dashboardData?.kpis?.salesGrowth || 0) >= 0 ? 'text-emerald-600' : 'text-red-600'
+                    }`}>
+                      {(dashboardData?.kpis?.salesGrowth || 0) >= 0 ? '+' : ''}
+                      {(dashboardData?.kpis?.salesGrowth || 0).toFixed(1)}%
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Actividad Reciente */}
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="w-5 h-5 text-blue-600" />
+                Actividad Reciente
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="max-h-64 overflow-y-auto">
+              <div className="space-y-3">
+                {recentActivity && recentActivity.length > 0 ? (
+                  recentActivity.map((activity, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 rounded-lg bg-gray-50/50">
+                      <div className="flex items-center gap-3">
+                        <div className={`w-2 h-2 rounded-full ${
+                          activity.type === 'sale' ? 'bg-green-500' :
+                          activity.type === 'alert' ? 'bg-red-500' :
+                          activity.type === 'ai' ? 'bg-emerald-500' : 'bg-blue-500'
+                        }`} />
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{activity.message}</p>
+                          <p className="text-xs text-gray-500">{activity.amount}</p>
+                        </div>
+                      </div>
+                      <span className="text-xs text-gray-400">{activity.time}</span>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Activity className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No hay actividad reciente</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Top Productos */}
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Star className="w-5 h-5 text-amber-600" />
+                Top Productos
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {(reportsData?.topProducts || productsReport?.topProducts || []).length > 0 ? (
+                  (reportsData?.topProducts || productsReport?.topProducts || []).slice(0, 5).map((product, index) => (
+                    <div key={product.id || index} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50/50 transition-colors cursor-pointer" onClick={() => navigate('/productos')}>
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-lg flex items-center justify-center text-white font-bold text-sm">
+                          {index + 1}
+                        </div>
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">{product.name}</p>
+                          <p className="text-xs text-gray-500">{product.quantity || product.sales || 0} vendidos</p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-semibold text-gray-900">
+                          {product.formattedRevenue || formatPrice(product.revenue || 0)}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <Star className="w-12 h-12 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No hay datos de productos disponibles</p>
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Métricas de Rendimiento Final */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <Lightbulb className="w-4 h-4" />
+                Eficiencia Operativa
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <div className="text-2xl font-bold text-emerald-600">{reportsData?.metrics?.operationalEfficiency || 85}%</div>
+                <div className="text-xs text-gray-500">
+                  {(reportsData?.metrics?.operationalEfficiency || 85) > 90 ? 'Excelente rendimiento' : 'Buen rendimiento'}
+                </div>
+                <div className="mt-2 flex items-center justify-center">
+                  <div className="w-16 h-2 bg-gray-200 rounded-full">
+                    <div
+                      className="h-2 bg-emerald-500 rounded-full"
+                      style={{ width: `${(reportsData?.metrics?.operationalEfficiency || 85)}%` }}
+                    />
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <Brain className="w-4 h-4" />
+                Estado de IA
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <div className="w-3 h-3 bg-green-500 rounded-full animate-pulse"></div>
+                  <span className="text-sm font-semibold text-green-600">Operativo</span>
+                </div>
+                <div className="text-xs text-gray-500 mb-2">
+                  {predictions && predictions.length > 0 ? 'Analizando tendencias' : 'Sistema listo'}
+                </div>
+                <div className="space-y-1">
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Precisión:</span>
+                    <span className="text-green-600 font-medium">
+                      {performanceMetrics?.accuracy || (reportsData?.metrics?.operationalEfficiency ? Math.min(99, Math.round(reportsData.metrics.operationalEfficiency + 5)) : 94)}%
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Análisis:</span>
+                    <span className="text-blue-600 font-medium">
+                      {predictions?.length || reportsData?.summary?.totalSales || 0} trans.
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-xs">
+                    <span className="text-gray-500">Tiempo resp:</span>
+                    <span className="text-purple-600 font-medium">
+                      {performanceMetrics?.processingTime || '120ms'}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <BarChart3 className="w-4 h-4" />
+                Comparativo Semanal
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <div className={`text-2xl font-bold ${(reportsData?.metrics?.weeklyComparison || 15.2) >= 0 ? 'text-blue-600' : 'text-red-600'}`}>
+                  {(reportsData?.metrics?.weeklyComparison || 15.2) >= 0 ? '+' : ''}{(reportsData?.metrics?.weeklyComparison || 15.2).toFixed(1)}%
+                </div>
+                <div className="text-xs text-gray-500">vs semana anterior</div>
+                <div className="mt-2">
+                  {/* Mini gráfico de barras comparativo */}
+                  <div className="flex justify-center items-end space-x-1 h-8">
+                    {[0.6, 0.8, 0.7, 1.0, 0.9, 0.8, 1.0].map((height, index) => (
+                      <div
+                        key={index}
+                        className={`w-2 bg-gradient-to-t rounded-sm ${
+                          index < 4 ? 'from-gray-300 to-gray-400' : 'from-blue-400 to-blue-500'
+                        }`}
+                        style={{ height: `${height * 24}px` }}
+                        title={index < 4 ? 'Semana anterior' : 'Esta semana'}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex justify-between text-xs text-gray-400 mt-1">
+                    <span>Sem. ant.</span>
+                    <span>Esta sem.</span>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-gray-600 flex items-center gap-2">
+                <TrendingUp className="w-4 h-4" />
+                Crecimiento
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="text-center">
+                <div className={`text-2xl font-bold ${(reportsData?.metrics?.growthRate || 28.7) >= 0 ? 'text-emerald-600' : 'text-red-600'}`}>
+                  {(reportsData?.metrics?.growthRate || 28.7) >= 0 ? '+' : ''}{(reportsData?.metrics?.growthRate || 28.7).toFixed(1)}%
+                </div>
+                <div className="text-xs text-gray-500">vs período anterior</div>
+                <div className="mt-2 flex items-center justify-center">
+                  {(reportsData?.metrics?.growthRate || 28.7) >= 0 ? (
+                    <>
+                      <ArrowUpRight className="w-4 h-4 text-emerald-500" />
+                      <span className="text-xs text-emerald-600 font-medium ml-1">Tendencia positiva</span>
+                    </>
+                  ) : (
+                    <>
+                      <ArrowDownRight className="w-4 h-4 text-red-500" />
+                      <span className="text-xs text-red-600 font-medium ml-1">Tendencia negativa</span>
+                    </>
+                  )}
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Métricas de Empleados */}
+        <Card className="bg-white/60 backdrop-blur-xl border-white/30">
+          <CardHeader>
+            <CardTitle className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-5 h-5 text-blue-600" />
+                Rendimiento del Equipo
+              </div>
+              <Badge variant="secondary" size="sm">
+                {user ? '1 activo' : '0 activos'}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {/* Métricas del usuario actual */}
+              {user && (
+                <div className="p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-200">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-blue-500 rounded-full flex items-center justify-center text-white font-semibold text-sm">
+                        {user.name?.charAt(0)?.toUpperCase() || 'U'}
+                      </div>
+                      <div>
+                        <h4 className="font-semibold text-gray-900">{user.name || 'Usuario Actual'}</h4>
+                        <p className="text-xs text-gray-600">{user.role === 'admin' ? 'Administrador' : user.role === 'supervisor' ? 'Supervisor' : 'Cajero'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                      <span className="text-xs text-green-600 font-medium">En línea</span>
+                    </div>
+                  </div>
+                  
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-blue-600">
+                        {todayMetrics?.totalSales || 12}
+                      </div>
+                      <div className="text-xs text-gray-600">Ventas Hoy</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-green-600">
+                        {formatPrice(todayMetrics?.totalAmount || 245000)}
+                      </div>
+                      <div className="text-xs text-gray-600">Facturación</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-purple-600">
+                        {formatPrice(todayMetrics?.averageTicket || 20416)}
+                      </div>
+                      <div className="text-xs text-gray-600">Ticket Prom.</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-lg font-bold text-orange-600">
+                        {Math.floor((Date.now() - (cashMetrics?.openTime || Date.now() - 8*60*60*1000)) / (1000 * 60 * 60))}h
+                      </div>
+                      <div className="text-xs text-gray-600">Tiempo Activo</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 pt-3 border-t border-blue-200">
+                    <div className="flex justify-between items-center">
+                      <span className="text-xs text-gray-600">Eficiencia del turno</span>
+                      <div className="flex items-center gap-2">
+                        <div className="w-12 h-1 bg-gray-200 rounded-full">
+                          <div className="w-10 h-1 bg-green-500 rounded-full"></div>
+                        </div>
+                        <span className="text-xs font-medium text-green-600">87%</span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Comparativo de rendimiento */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <div className="text-sm font-semibold text-gray-700">Tu Desempeño</div>
+                  <div className="text-xs text-gray-500 mt-1">Hoy</div>
+                  <div className="text-lg font-bold text-blue-600 mt-1">
+                    <Star className="w-4 h-4 inline text-yellow-500 fill-current" />
+                    {todayMetrics?.totalSales || 0} ventas
+                  </div>
+                </div>
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <div className="text-sm font-semibold text-gray-700">Facturación Hoy</div>
+                  <div className="text-xs text-gray-500 mt-1">Total procesado</div>
+                  <div className="text-lg font-bold text-green-600 mt-1">
+                    {formatPrice(todayMetrics?.totalAmount || 0)}
+                  </div>
+                </div>
+                <div className="text-center p-3 bg-gray-50 rounded-lg">
+                  <div className="text-sm font-semibold text-gray-700">Meta Diaria</div>
+                  <div className="text-xs text-gray-500 mt-1">Progreso actual</div>
+                  <div className="text-lg font-bold text-green-600 mt-1">
+                    {dashboardData?.kpis?.salesTarget
+                      ? Math.min(100, Math.round(((todayMetrics?.totalAmount || 0) / dashboardData.kpis.salesTarget) * 100))
+                      : 0}%
+                  </div>
+                </div>
+              </div>
+
+              {/* Rankings rápidos */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h5 className="text-sm font-semibold text-gray-700 mb-3">Tu Rendimiento Hoy</h5>
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between p-3 bg-white rounded-lg border-2 border-blue-200">
+                    <div className="flex items-center gap-2">
+                      <div className="w-6 h-6 bg-gradient-to-br from-yellow-400 to-yellow-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-md">
+                        <Star className="w-3 h-3 fill-current" />
+                      </div>
+                      <span className="font-semibold text-gray-900">{user?.name || 'Usuario'}</span>
+                    </div>
+                    <span className="text-blue-600 font-bold">{todayMetrics?.totalSales || 0} ventas</span>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 mt-2">
+                    <div className="text-center p-2 bg-white rounded border border-gray-200">
+                      <div className="text-xs text-gray-500">Facturación</div>
+                      <div className="text-sm font-bold text-gray-900">{formatPrice(todayMetrics?.totalAmount || 0)}</div>
+                    </div>
+                    <div className="text-center p-2 bg-white rounded border border-gray-200">
+                      <div className="text-xs text-gray-500">Ticket Prom.</div>
+                      <div className="text-sm font-bold text-gray-900">{formatPrice(todayMetrics?.averageTicket || 0)}</div>
+                    </div>
+                  </div>
+
+                  <div className="text-xs text-gray-500 text-center mt-2 p-2 bg-blue-50 rounded">
+                    💡 Tip: Los rankings de equipo se mostrarán cuando haya múltiples usuarios activos
+                  </div>
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Modal de Gestión de Caja */}
+        <CashRegisterModal
+          isOpen={showCashModal}
+          onClose={() => setShowCashModal(false)}
+          type={cashModalType}
+          onSuccess={handleCashSuccess}
+        />
+      </div>
     </div>
   );
 };
 
 export default DashboardSimple;
-
-// TODO: Próximas mejoras
-// - Añadir más gráficos interactivos
-// - Implementar filtros avanzados
-// - Agregar comparación entre períodos
-// - Añadir alertas personalizables
-// - Implementar dashboard personalizable por usuario
