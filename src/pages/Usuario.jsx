@@ -133,6 +133,53 @@ const Usuario = () => {
     }
   }, [user]);
 
+  // Aplicar tema cuando cambian las preferencias
+  useEffect(() => {
+    const applyTheme = () => {
+      const html = document.documentElement;
+
+      // Remover clases anteriores
+      html.classList.remove('light', 'dark');
+
+      // Aplicar nuevo tema
+      if (preferences.theme === 'dark') {
+        html.classList.add('dark');
+        document.body.style.backgroundColor = '#0f172a';
+      } else if (preferences.theme === 'light') {
+        html.classList.add('light');
+        document.body.style.backgroundColor = '#ffffff';
+      } else if (preferences.theme === 'auto') {
+        // Detectar preferencia del sistema
+        const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+        html.classList.add(prefersDark ? 'dark' : 'light');
+        document.body.style.backgroundColor = prefersDark ? '#0f172a' : '#ffffff';
+      }
+
+      // Guardar en localStorage
+      localStorage.setItem(`userPreferences_${user?.id}`, JSON.stringify(preferences));
+    };
+
+    applyTheme();
+  }, [preferences.theme, user?.id]);
+
+  // Manejar notificaciones
+  useEffect(() => {
+    if (preferences.notifications) {
+      localStorage.setItem(`notificationsEnabled_${user?.id}`, 'true');
+    } else {
+      localStorage.setItem(`notificationsEnabled_${user?.id}`, 'false');
+    }
+  }, [preferences.notifications, user?.id]);
+
+  // Manejar sonidos
+  useEffect(() => {
+    if (preferences.soundEnabled) {
+      localStorage.setItem(`soundEnabled_${user?.id}`, 'true');
+    } else {
+      localStorage.setItem(`soundEnabled_${user?.id}`, 'false');
+    }
+  }, [preferences.soundEnabled, user?.id]);
+
   const formatARS = (amount) => {
     return new Intl.NumberFormat('es-AR', {
       style: 'currency',
@@ -163,14 +210,53 @@ const Usuario = () => {
 
   const handleSavePreferences = async () => {
     try {
+      // Reproducir sonido de confirmación si está habilitado
+      if (preferences.soundEnabled) {
+        try {
+          const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+          const oscillator = audioContext.createOscillator();
+          const gain = audioContext.createGain();
+
+          oscillator.connect(gain);
+          gain.connect(audioContext.destination);
+
+          oscillator.frequency.value = 800;
+          oscillator.type = 'sine';
+
+          gain.gain.setValueAtTime(0.3, audioContext.currentTime);
+          gain.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.1);
+
+          oscillator.start(audioContext.currentTime);
+          oscillator.stop(audioContext.currentTime + 0.1);
+        } catch (e) {
+          console.log('No audio API available');
+        }
+      }
+
       // Guardar preferencias en el backend
       await apiService.updateUserPreferences(user.id, preferences);
+
       success('⚙️ Preferencias guardadas exitosamente');
       ai('🤖 IA adaptando configuración', 'Sistema optimizado según tus preferencias');
+
+      // Mostrar resumen de cambios
+      const changes = [];
+      if (preferences.theme) changes.push(`Tema: ${preferences.theme}`);
+      if (preferences.language) changes.push(`Idioma: ${preferences.language === 'es' ? 'Español' : 'English'}`);
+      if (preferences.timezone) changes.push(`Zona: ${preferences.timezone.split('/')[1]}`);
+
+      if (changes.length > 0) {
+        addNotification({
+          type: 'success',
+          message: `Cambios aplicados: ${changes.join(', ')}`
+        });
+      }
+
       setShowPreferencesModal(false);
     } catch (err) {
       error('❌ Error al guardar preferencias');
-      // Las preferencias se guardarán localmente como fallback
+      warning('⚠️ Las preferencias se guardarán localmente');
+      // Las preferencias se guardarán localmente como fallback (por los useEffect)
     }
   };
 
@@ -563,16 +649,40 @@ const Usuario = () => {
             <div className="space-y-6">
               {/* Theme */}
               <div>
-                <Label className="text-base font-medium">Tema</Label>
-                <div className="mt-2">
-                  <Select
-                    value={preferences.theme}
-                    onValueChange={(value) => setPreferences(prev => ({ ...prev, theme: value }))}
-                  >
-                    <option value="light">Claro</option>
-                    <option value="dark">Oscuro</option>
-                    <option value="auto">Automático</option>
-                  </Select>
+                <Label className="text-base font-medium mb-3 flex items-center gap-2">
+                  {preferences.theme === 'dark' ? (
+                    <Moon className="w-4 h-4" />
+                  ) : preferences.theme === 'light' ? (
+                    <Sun className="w-4 h-4" />
+                  ) : (
+                    <Globe className="w-4 h-4" />
+                  )}
+                  Tema: <span className="text-green-600 font-semibold">{
+                    preferences.theme === 'dark' ? 'Oscuro' :
+                    preferences.theme === 'light' ? 'Claro' : 'Automático'
+                  }</span>
+                </Label>
+
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  {[
+                    { value: 'light', label: 'Claro', icon: Sun, bg: 'bg-white border-yellow-400' },
+                    { value: 'dark', label: 'Oscuro', icon: Moon, bg: 'bg-slate-900 border-blue-400' },
+                    { value: 'auto', label: 'Auto', icon: Globe, bg: 'bg-gradient-to-r from-white to-slate-900 border-purple-400' }
+                  ].map(option => (
+                    <Button
+                      key={option.value}
+                      onClick={() => setPreferences(prev => ({ ...prev, theme: option.value }))}
+                      variant={preferences.theme === option.value ? 'default' : 'outline'}
+                      className={`flex flex-col gap-2 h-24 border-2 ${
+                        preferences.theme === option.value
+                          ? 'border-green-500 bg-green-50'
+                          : option.bg
+                      }`}
+                    >
+                      <option.icon className="w-5 h-5" />
+                      <span className="text-sm font-medium">{option.label}</span>
+                    </Button>
+                  ))}
                 </div>
               </div>
 
