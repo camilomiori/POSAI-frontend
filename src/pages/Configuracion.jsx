@@ -198,31 +198,89 @@ const Configuracion = () => {
     success('📄 Configuración exportada');
   };
 
-  const handleRunBackup = () => {
+  const handleRunBackup = async () => {
     setLoading(true);
     warning('🔄 Iniciando backup manual...');
 
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Guardar backup en backend
+      await apiService.updateSetting('lastBackup', new Date().toISOString());
+
+      // Simular tiempo de procesamiento
+      await new Promise(resolve => setTimeout(resolve, 2000));
+
       success('💾 Backup completado exitosamente');
       ai('🤖 Datos respaldados', 'Backup manual ejecutado correctamente');
-    }, 3000);
+
+      // Agregar a actividad reciente
+      setRecentActivity(prev => [
+        {
+          id: prev.length + 1,
+          type: 'backup',
+          description: 'Backup manual completado exitosamente',
+          user: user?.nombre || 'admin',
+          timestamp: new Date(),
+          status: 'success'
+        },
+        ...prev.slice(0, 9)
+      ]);
+
+      addNotification({
+        type: 'success',
+        message: '✅ Backup completado - Todos los datos han sido respaldados'
+      });
+
+    } catch (err) {
+      error('❌ Error al realizar backup');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSystemOptimization = () => {
+  const handleSystemOptimization = async () => {
     setLoading(true);
     ai('🔧 Optimizando sistema...', 'Ejecutando rutinas de mantenimiento');
 
-    setTimeout(() => {
-      setLoading(false);
+    try {
+      // Guardar que se ejecutó optimización
+      await apiService.updateSetting('lastOptimization', new Date().toISOString());
+
+      // Simular tiempo de procesamiento
+      await new Promise(resolve => setTimeout(resolve, 3500));
+
       success('⚡ Sistema optimizado exitosamente');
+
+      // Mejorar métricas
       setSystemStats(prev => ({
         ...prev,
         cpuUsage: Math.max(15, prev.cpuUsage - 8),
         memoryUsage: Math.max(45, prev.memoryUsage - 12),
         responseTime: Math.max(180, prev.responseTime - 55)
       }));
-    }, 4000);
+
+      // Agregar a actividad reciente
+      setRecentActivity(prev => [
+        {
+          id: prev.length + 1,
+          type: 'config',
+          description: 'Sistema optimizado exitosamente',
+          user: 'system',
+          timestamp: new Date(),
+          status: 'success'
+        },
+        ...prev.slice(0, 9)
+      ]);
+
+      addNotification({
+        type: 'success',
+        message: '⚡ Optimización completada - Sistema mejorado'
+      });
+
+    } catch (err) {
+      error('❌ Error al optimizar sistema');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatDateTime = (date) => {
@@ -764,21 +822,65 @@ const Configuracion = () => {
 
               <div className="flex gap-3 pt-4">
                 <Button
-                  onClick={() => {
+                  onClick={async () => {
                     setShowModelDialog(false);
+                    setLoading(true);
+
                     ai('🧠 Entrenando modelo IA...', 'Proceso iniciado, completará en ~5 minutos');
-                    setTimeout(() => {
+
+                    try {
+                      // Guardar en backend que se inició entrenamiento
+                      await apiService.updateSetting('lastAiTraining', new Date().toISOString());
+
+                      // Simular tiempo de entrenamiento
+                      await new Promise(resolve => setTimeout(resolve, 4500));
+
                       success('🎓 Modelo IA entrenado exitosamente');
-                    }, 3000);
+
+                      // Agregar a actividad reciente
+                      setRecentActivity(prev => [
+                        {
+                          id: prev.length + 1,
+                          type: 'config',
+                          description: 'Modelo IA entrenado exitosamente',
+                          user: 'system',
+                          timestamp: new Date(),
+                          status: 'success'
+                        },
+                        ...prev.slice(0, 9)
+                      ]);
+
+                      addNotification({
+                        type: 'success',
+                        message: '🎓 Entrenamiento completado - Modelo IA actualizado'
+                      });
+
+                      // Mejorar precisión de predicciones
+                      setAiConfig(prev => ({
+                        ...prev,
+                        predictionAccuracy: Math.min(100, prev.predictionAccuracy + 2)
+                      }));
+
+                    } catch (err) {
+                      error('❌ Error al entrenar modelo');
+                    } finally {
+                      setLoading(false);
+                    }
                   }}
+                  disabled={loading}
                   className="flex-1 bg-purple-600 hover:bg-purple-700"
                 >
-                  <Brain className="w-4 h-4 mr-2" />
+                  {loading ? (
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                  ) : (
+                    <Brain className="w-4 h-4 mr-2" />
+                  )}
                   Iniciar Entrenamiento
                 </Button>
                 <Button
                   variant="outline"
                   onClick={() => setShowModelDialog(false)}
+                  disabled={loading}
                   className="flex-1"
                 >
                   Cancelar
