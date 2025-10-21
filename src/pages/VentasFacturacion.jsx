@@ -18,7 +18,10 @@ import {
   Printer,
   Package,
   Tag,
-  Sparkles
+  Sparkles,
+  Eye,
+  XCircle,
+  Settings
 } from 'lucide-react';
 import { 
   Card, 
@@ -41,11 +44,9 @@ import useCart from '../hooks/useCart';
 import useToast from '../hooks/useToast';
 import useDebounce from '../hooks/useDebounce';
 import useKeyboardShortcuts from '../hooks/useKeyboardShortcuts';
-import { apiService, getAiEngine } from '../services';
-import { salesHistoryService } from '../services/salesHistory';
-import { cashRegisterService } from '../services/cashRegister';
-import { TicketPreview } from '../components/common';
-import { formatARS, formatDateTime } from '../utils/formatters';
+import { apiService, getAiEngine, salesHistoryService, cashRegisterService } from '../services';
+import { TicketPreview, CashRegisterModal } from '../components/common';
+import { formatARS, formatDateTime, formatPrice } from '../utils/formatters';
 import { PAYMENT_METHODS, INVOICE_TYPES, PRODUCT_CATEGORIES } from '../utils/constants';
 
 // Datos de productos de ejemplo para autopartes
@@ -136,8 +137,9 @@ const VentasFacturacion = () => {
   const { success, error, warning, ai } = useToast();
 
   // Estados principales
-  const [products, setProducts] = useState(SAMPLE_PRODUCTS);
-  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [barcodeInput, setBarcodeInput] = useState('');
   const [customerInfo, setCustomerInfo] = useState({
@@ -167,6 +169,12 @@ const VentasFacturacion = () => {
   const [loadingAI, setLoadingAI] = useState(false);
   const barcodeInputRef = useRef(null);
 
+  // Estados para gestión de caja
+  const [cashMetrics, setCashMetrics] = useState(null);
+  const [showCashModal, setShowCashModal] = useState(false);
+  const [cashModalType, setCashModalType] = useState('view'); // 'open', 'close', 'movement', 'view'
+  const [hideCashAmounts, setHideCashAmounts] = useState(true);
+
   const debouncedSearch = useDebounce(searchTerm, 300);
 
   // Helper para hacer focus al input de código de barras
@@ -191,10 +199,69 @@ const VentasFacturacion = () => {
     });
   }, [products, debouncedSearch]);
 
+  // Función para cargar productos (reutilizable)
+  const loadProducts = useCallback(async () => {
+    try {
+      setLoadingProducts(true);
+      const response = await apiService.getProducts();
+      const productsData = response.data || response;
+
+      if (Array.isArray(productsData) && productsData.length > 0) {
+        // Adaptar productos del backend al formato esperado
+        const adaptedProducts = productsData.map(p => ({
+          id: p.id,
+          name: p.name,
+          category: typeof p.category === 'string' ? p.category : (p.category?.name || 'general'),
+          price: parseFloat(p.price) || 0,
+          stock: parseInt(p.stock) || 0,
+          code: p.code || p.sku || `PROD${p.id}`,
+          brand: p.brand || 'Sin marca'
+        }));
+        setProducts(adaptedProducts);
+        console.log(`✅ ${adaptedProducts.length} productos cargados/actualizados desde backend`);
+      } else {
+        // Fallback a productos de muestra si el backend no tiene productos
+        console.warn('⚠️ Backend no tiene productos, usando SAMPLE_PRODUCTS');
+        setProducts(SAMPLE_PRODUCTS);
+      }
+    } catch (err) {
+      console.error('❌ Error cargando productos:', err);
+      warning('No se pudieron cargar productos del servidor, usando datos locales');
+      setProducts(SAMPLE_PRODUCTS);
+    } finally {
+      setLoadingProducts(false);
+      setLoading(false);
+    }
+  }, [warning]);
+
+  // Cargar productos desde el backend al iniciar
+  useEffect(() => {
+    loadProducts();
+  }, [loadProducts]);
+
   // Auto-focus al cargar la página
   useEffect(() => {
     focusBarcodeInput();
+    loadCashMetrics(); // Cargar métricas de caja al iniciar
   }, [focusBarcodeInput]);
+
+  // Función para cargar métricas de caja
+  const loadCashMetrics = useCallback(() => {
+    const metrics = cashRegisterService.getTodayMetrics();
+    setCashMetrics(metrics);
+  }, []);
+
+  // Funciones para gestión de caja
+  const handleCashOperation = (type) => {
+    setCashModalType(type);
+    setShowCashModal(true);
+  };
+
+  const handleCashSuccess = () => {
+    // Recargar métricas después de operación de caja
+    loadCashMetrics();
+    success('Operación de caja completada exitosamente');
+  };
 
   // Agregar producto por código de barras
   const handleBarcodeSubmit = (e) => {
@@ -356,6 +423,11 @@ const VentasFacturacion = () => {
     }
   }, [cartItems, aiAssistantActive]);
 
+  // Efecto para cargar métricas de caja al montar el componente
+  useEffect(() => {
+    loadCashMetrics();
+  }, [loadCashMetrics]);
+
   // Agregar producto al carrito
   const handleAddToCart = (product) => {
     addItem({
@@ -363,7 +435,8 @@ const VentasFacturacion = () => {
       name: product.name,
       price: product.price,
       code: product.code,
-      brand: product.brand
+      brand: product.brand,
+      category: product.category
     });
     success(`${product.name} agregado al carrito`);
   };
@@ -412,7 +485,6 @@ const VentasFacturacion = () => {
 
     try {
       setProcessing(true);
-      await new Promise(resolve => setTimeout(resolve, 1500));
 
       const quoteNumber = `PRES-${Date.now().toString().slice(-6)}`;
       
@@ -463,9 +535,6 @@ const VentasFacturacion = () => {
     try {
       setProcessing(true);
 
-      // Simular procesamiento
-      await new Promise(resolve => setTimeout(resolve, 2000));
-
       const documentNumber = documentType === 'invoice' 
         ? `FC-${Date.now().toString().slice(-6)}`
         : `VTA-${Date.now().toString().slice(-6)}`;
@@ -503,11 +572,47 @@ const VentasFacturacion = () => {
   };
 
   // Completar venta después de imprimir ticket
-  const completeSale = (ticketData) => {
+  const completeSale = async (ticketData) => {
     try {
-      // Guardar en historial
+      let savedToBackend = false;
+
+      // Intentar guardar en el backend si NO es presupuesto
+      if (ticketData.documentType !== 'quote') {
+        try {
+          // Preparar datos para el backend
+          const saleDataForBackend = {
+            customerId: null, // Por ahora sin clientes, mejorar después
+            items: ticketData.items.map(item => ({
+              productId: item.id,
+              quantity: item.quantity,
+              unitPrice: item.price
+            })),
+            subtotal: ticketData.subtotal,
+            tax: 0, // IVA se puede calcular después
+            discount: ticketData.discountAmount || 0,
+            total: ticketData.total,
+            paymentMethod: ticketData.payment?.method || 'cash',
+            paymentStatus: 'PAID',
+            cashAmount: ticketData.total, // Por ahora asumir pago exacto
+            changeAmount: 0
+          };
+
+          console.log('💾 Guardando venta en backend...', saleDataForBackend);
+          const backendResponse = await apiService.createSale(saleDataForBackend);
+
+          if (backendResponse) {
+            console.log('✅ Venta guardada en backend:', backendResponse);
+            savedToBackend = true;
+          }
+        } catch (backendError) {
+          console.warn('⚠️ No se pudo guardar en backend, usando localStorage:', backendError);
+          warning('Venta guardada localmente - Backend no disponible');
+        }
+      }
+
+      // Guardar en historial local (siempre, como fallback)
       salesHistoryService.addSale(ticketData);
-      
+
       // Registrar en caja si está abierta y es venta (no presupuesto)
       if (ticketData.documentType !== 'quote' && cashRegisterService.isOpen()) {
         cashRegisterService.addSale({
@@ -518,7 +623,7 @@ const VentasFacturacion = () => {
           items: ticketData.items
         });
       }
-      
+
       // Mostrar confirmación
       if (ticketData.documentType === 'invoice') {
         success(`📄 Factura procesada - ${ticketData.id}`);
@@ -527,7 +632,7 @@ const VentasFacturacion = () => {
       } else {
         success(`✅ Venta procesada - ${ticketData.id}`);
       }
-      
+
       if (aiAssistantActive) {
         ai(`🤖 IA: Operación completada con ${aiSuggestions.length} sugerencias aplicadas`);
       }
@@ -546,10 +651,20 @@ const VentasFacturacion = () => {
       setSalesInsights(null);
       setShowTicketDialog(false);
       setCurrentTicketData(null);
-      
+
+      // Actualizar métricas de caja después de la venta
+      loadCashMetrics();
+
+      // 🔄 RECARGAR PRODUCTOS para actualizar stock (solo si se guardó en backend)
+      if (savedToBackend) {
+        console.log('🔄 Recargando productos para actualizar stock...');
+        await loadProducts();
+      }
+
       // Volver a hacer focus al input de código de barras para la siguiente venta
       focusBarcodeInput();
     } catch (err) {
+      console.error('Error al completar la venta:', err);
       error('Error al completar la venta');
     }
   };
@@ -580,6 +695,19 @@ const VentasFacturacion = () => {
     }
   }, [isEmpty, setShowDiscountDialog, setShowPaymentDialog, setShowCustomerDialog]);
 
+  // Mostrar loader mientras se cargan los productos
+  if (loading || loadingProducts) {
+    return (
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <div className="text-center">
+          <div className="w-16 h-16 border-4 border-blue-200 border-t-blue-600 rounded-full animate-spin mx-auto mb-4" />
+          <p className="text-gray-600 text-lg font-medium">Cargando productos...</p>
+          <p className="text-gray-500 text-sm mt-2">Conectando con el servidor</p>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-gray-50 p-6">
       <div className="max-w-7xl mx-auto">
@@ -588,8 +716,10 @@ const VentasFacturacion = () => {
         <div className="mb-8">
           <div className="flex items-center justify-between mb-4">
             <div>
-              <h1 className="text-3xl font-bold text-gray-900">Sistema de Ventas</h1>
-              <p className="text-gray-600 mt-1">
+              <h1 className="text-3xl sm:text-4xl lg:text-5xl font-black bg-gradient-to-r from-gray-900 via-blue-600 to-indigo-600 bg-clip-text text-transparent tracking-tight">
+                Ventas
+              </h1>
+              <p className="text-base sm:text-lg text-gray-500 font-medium">
                 Procesamiento inteligente con IA para autopartes
               </p>
             </div>
@@ -669,9 +799,6 @@ const VentasFacturacion = () => {
                         className="text-lg"
                         autoFocus
                       />
-                      <p className="text-xs text-gray-500 mt-1">
-                        Códigos de prueba: FIL001, FRE002, BAT003, NEU004, EMB005, AMO006
-                      </p>
                     </div>
                     <Button type="submit" disabled={!barcodeInput.trim()}>
                       <Plus className="w-4 h-4 mr-2" />
@@ -742,6 +869,98 @@ const VentasFacturacion = () => {
                     <p className="text-sm">No se encontraron productos</p>
                   </div>
                 )}
+              </CardContent>
+            </Card>
+
+            {/* Panel de Gestión de Caja */}
+            <Card className="mt-6 bg-white/70 backdrop-blur-sm border border-gray-200">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2">
+                    <Settings className="w-5 h-5 text-blue-600" />
+                    Gestión de Caja
+                  </CardTitle>
+                  <div className="flex items-center gap-2">
+                    {cashMetrics && (
+                      <div className={`px-3 py-1 rounded-full text-xs font-medium ${
+                        cashMetrics.isOpen 
+                          ? 'bg-green-100 text-green-700' 
+                          : 'bg-red-100 text-red-700'
+                      }`}>
+                        {cashMetrics.isOpen ? 'Abierta' : 'Cerrada'}
+                      </div>
+                    )}
+                    <button
+                      onClick={() => setHideCashAmounts(!hideCashAmounts)}
+                      className="px-2 py-1 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors flex items-center gap-1"
+                      title={hideCashAmounts ? 'Mostrar números' : 'Ocultar números'}
+                    >
+                      <Eye className={`w-4 h-4 ${hideCashAmounts ? 'text-gray-500' : 'text-blue-600'}`} />
+                      <span className="text-xs font-medium">
+                        {hideCashAmounts ? 'Ver' : 'Ocultar'}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              </CardHeader>
+              
+              <CardContent>
+                {cashMetrics && (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
+                    <div className="text-center p-3 bg-blue-50 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Efectivo Actual</p>
+                      <p className="text-lg font-bold text-blue-700">
+                        {hideCashAmounts ? '••••••' : formatPrice(cashMetrics.currentAmount)}
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-green-50 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Ventas Hoy</p>
+                      <p className="text-lg font-bold text-green-700">
+                        {hideCashAmounts ? '••••••' : formatPrice(cashMetrics.todaySales)}
+                      </p>
+                    </div>
+                    <div className="text-center p-3 bg-purple-50 rounded-lg">
+                      <p className="text-xs text-gray-600 mb-1">Transacciones</p>
+                      <p className="text-lg font-bold text-purple-700">
+                        {hideCashAmounts ? '•••' : cashMetrics.transactionCount}
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex gap-2 justify-center">
+                  {cashMetrics && !cashMetrics.isOpen ? (
+                    <button
+                      onClick={() => handleCashOperation('open')}
+                      className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors text-sm font-medium"
+                    >
+                      Abrir Caja
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => handleCashOperation('view')}
+                        className="px-3 py-2 bg-blue-500 text-white rounded-lg hover:bg-blue-600 transition-colors text-sm font-medium flex items-center gap-1"
+                      >
+                        <Eye className="w-4 h-4" />
+                        Ver Estado
+                      </button>
+                      <button
+                        onClick={() => handleCashOperation('movement')}
+                        className="px-3 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors text-sm font-medium"
+                      >
+                        Movimiento
+                      </button>
+                      <button
+                        onClick={() => handleCashOperation('close')}
+                        className="px-3 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors text-sm font-medium flex items-center gap-1"
+                      >
+                        <XCircle className="w-4 h-4" />
+                        Cerrar Caja
+                      </button>
+                    </>
+                  )}
+                </div>
               </CardContent>
             </Card>
 
@@ -1275,6 +1494,16 @@ const VentasFacturacion = () => {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+
+        {/* Modal de Gestión de Caja */}
+        {showCashModal && (
+          <CashRegisterModal
+            type={cashModalType}
+            isOpen={showCashModal}
+            onClose={() => setShowCashModal(false)}
+            onSuccess={handleCashSuccess}
+          />
+        )}
 
         {/* Dialog de Ticket Preview */}
         {showTicketDialog && currentTicketData && (
