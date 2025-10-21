@@ -81,7 +81,7 @@ export const MOCK_SALES = [
     id: 1001,
     timestamp: Date.now() - (2 * 60 * 60 * 1000),
     items: [
-      { id: 1, name: 'Neumático Michelin 185/65R15', quantity: 4, price: 45000, subtotal: 180000 }
+      { id: 1, name: 'Neumático Michelin 185/65R15', quantity: 4, price: 45000, subtotal: 180000, category: 'neumaticos' }
     ],
     customer: {
       name: 'Juan Pérez',
@@ -95,6 +95,50 @@ export const MOCK_SALES = [
     discount: 0,
     tax: 0,
     total: 180000,
+    userId: 1,
+    status: 'completed'
+  },
+  {
+    id: 1002,
+    timestamp: Date.now() - (1.5 * 60 * 60 * 1000),
+    items: [
+      { id: 2, name: 'Batería BOSCH S4 12V 60Ah', quantity: 2, price: 32000, subtotal: 64000, category: 'electricidad' },
+      { id: 3, name: 'Aceite Castrol Edge 5W30', quantity: 3, price: 12500, subtotal: 37500, category: 'aceites' }
+    ],
+    customer: {
+      name: 'María García',
+      email: 'maria@email.com',
+      cuit: '27-23456789-8',
+      phone: '+54 11 2345-6789'
+    },
+    payment: { method: 'efectivo', amount: 101500 },
+    invoice: { type: 'B', number: 'B-00001002' },
+    subtotal: 101500,
+    discount: 0,
+    tax: 0,
+    total: 101500,
+    userId: 1,
+    status: 'completed'
+  },
+  {
+    id: 1003,
+    timestamp: Date.now() - (1 * 60 * 60 * 1000),
+    items: [
+      { id: 6, name: 'Pastillas de Freno Brembo', quantity: 1, price: 22000, subtotal: 22000, category: 'frenos' },
+      { id: 9, name: 'Bujías NGK Iridium', quantity: 4, price: 8500, subtotal: 34000, category: 'encendido' }
+    ],
+    customer: {
+      name: 'Carlos López',
+      email: 'carlos@email.com',
+      cuit: '23-34567890-7',
+      phone: '+54 11 3456-7890'
+    },
+    payment: { method: 'transferencia', amount: 56000 },
+    invoice: { type: 'A', number: 'A-00001003' },
+    subtotal: 56000,
+    discount: 0,
+    tax: 0,
+    total: 56000,
     userId: 1,
     status: 'completed'
   }

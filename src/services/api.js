@@ -1,5 +1,6 @@
 // services/api.js
 import { API_CONFIG, MESSAGES } from '../utils/constants';
+import { networkStatus, offlineUtils } from '../utils/offline';
 
 /**
  * API Service - Maneja todas las comunicaciones con el backend
@@ -10,17 +11,17 @@ class ApiService {
     this.baseURL = API_CONFIG.BASE_URL;
     this.timeout = API_CONFIG.TIMEOUT;
     this.retryAttempts = API_CONFIG.RETRY_ATTEMPTS;
-    this.isOnline = navigator.onLine;
-    
-    // Event listener para estado de conexión
-    window.addEventListener('online', () => {
-      this.isOnline = true;
-      this.onConnectionRestore?.();
-    });
-    
-    window.addEventListener('offline', () => {
-      this.isOnline = false;
-      this.onConnectionLost?.();
+    this.isOnline = networkStatus.isOnline();
+
+    // Subscribe to network status changes
+    this.unsubscribeNetworkStatus = networkStatus.addListener((isOnline) => {
+      this.isOnline = isOnline;
+      if (isOnline) {
+        this.onConnectionRestore?.();
+      } else {
+        this.onConnectionLost?.();
+        offlineUtils.showOfflineNotification();
+      }
     });
   }
 
@@ -33,7 +34,9 @@ class ApiService {
   async request(endpoint, options = {}) {
     // En modo desarrollo, usar mock data directamente sin errores
     if (API_CONFIG.MOCK_MODE || this.baseURL.includes('mock')) {
-      console.log(`[MOCK API] ${options.method || 'GET'} ${endpoint} - Using mock data directly`);
+      if (import.meta.env.DEV) {
+        console.log(`[MOCK API] ${options.method || 'GET'} ${endpoint} - Using mock data directly`);
+      }
       // Simular delay de red más corto
       await new Promise(resolve => setTimeout(resolve, 100));
       // NO lanzar error, sino ir directo al catch de cada método
@@ -71,24 +74,30 @@ class ApiService {
         });
         
         clearTimeout(timeoutId);
-        
+
         if (!response.ok) {
-          throw new Error(await this.handleErrorResponse(response));
+          const errorMessage = await this.handleErrorResponse(response);
+          const error = new Error(errorMessage);
+          error.statusCode = response.status; // Agregar código de status al error
+          throw error;
         }
-        
+
         const data = await response.json();
         return this.handleSuccessResponse(data);
         
       } catch (error) {
         lastError = error;
-        
-        // No reintentar en ciertos tipos de errores
-        if (error.name === 'AbortError' || 
-            error.message.includes('401') || 
-            error.message.includes('403')) {
+
+        // No reintentar en errores de cliente (4xx) ni abort
+        if (error.name === 'AbortError' ||
+            error.statusCode === 400 ||
+            error.statusCode === 401 ||
+            error.statusCode === 403 ||
+            error.statusCode === 404 ||
+            error.statusCode === 409) { // Conflict (ej: SKU duplicado)
           break;
         }
-        
+
         // Esperar antes del siguiente intento
         if (attempt < this.retryAttempts) {
           await this.delay(Math.pow(2, attempt) * 1000); // Exponential backoff
@@ -205,15 +214,44 @@ class ApiService {
    */
   async login(credentials) {
     try {
-      const response = await this.post('/auth/login', credentials);
-      
+      const response = await this.post('/auth/login', {
+        email: credentials.username, // Backend espera email
+        password: credentials.password
+      });
+
       if (response.token) {
         this.setAuthToken(response.token);
       }
-      
-      return response;
+
+      // Adaptar respuesta del backend al formato esperado por frontend
+      return {
+        success: true,
+        token: response.token,
+        user: {
+          id: response.user.id,
+          nombre: response.user.name, // Backend usa 'name', frontend 'nombre'
+          email: response.user.email,
+          role: response.user.role.toLowerCase(), // Normalizar rol
+          tenantId: response.user.tenantId
+        }
+      };
     } catch (error) {
-      // Fallback a mock para desarrollo
+      console.error('Backend login failed:', error.message, 'Status:', error.statusCode);
+
+      // Si es error de autenticación o validación (400, 401, 403), NO usar fallback mock
+      if (error.statusCode === 400 ||
+          error.statusCode === 401 ||
+          error.statusCode === 403) {
+        throw new Error('Credenciales incorrectas');
+      }
+
+      // Si es rate limit (429), informar al usuario
+      if (error.statusCode === 429) {
+        throw new Error('Demasiados intentos. Espera un momento e intenta nuevamente.');
+      }
+
+      // Solo usar mock si backend no está disponible (network error, 500, etc.)
+      console.warn('Backend no disponible, usando mock');
       return this.mockLogin(credentials);
     }
   }
@@ -242,12 +280,63 @@ class ApiService {
   }
 
   /**
+   * Categorías
+   */
+  async getCategories(filters = {}) {
+    try {
+      const response = await this.get('/categories', filters);
+      const categories = response.data || response;
+
+      // Si no hay categorías, usar defaults
+      if (!Array.isArray(categories) || categories.length === 0) {
+        console.warn('No categories found in backend, using defaults');
+        return [
+          { id: '1', name: 'Bebidas' },
+          { id: '2', name: 'Alimentos' },
+          { id: '3', name: 'Limpieza' },
+          { id: '4', name: 'Electrónica' }
+        ];
+      }
+
+      return categories;
+    } catch (error) {
+      console.warn('Backend getCategories failed, using defaults:', error.message);
+      return [
+        { id: '1', name: 'Bebidas' },
+        { id: '2', name: 'Alimentos' },
+        { id: '3', name: 'Limpieza' },
+        { id: '4', name: 'Electrónica' }
+      ];
+    }
+  }
+
+  /**
    * Productos
    */
   async getProducts(filters = {}) {
     try {
-      return await this.get('/products', filters);
+      const response = await this.get('/products', filters);
+      const products = response.data || response;
+
+      // Adaptar productos: convertir category object a string
+      const adaptedProducts = products.map(product => ({
+        ...product,
+        code: product.sku, // Mapear backend sku a frontend code
+        category: product.category?.name || product.category || 'Sin categoría',
+        // Extraer supplier si el backend incluye suppliers relation
+        supplier: Array.isArray(product.suppliers) && product.suppliers.length > 0
+          ? (product.suppliers[0].supplier?.name || product.suppliers[0].supplier?.nombre || '')
+          : (product.supplier?.name || product.supplier || ''),
+        // brand ahora es un campo directo en el modelo
+        brand: product.brand || ''
+      }));
+
+      return {
+        data: adaptedProducts,
+        total: response.total || products.length
+      };
     } catch (error) {
+      console.warn('Backend getProducts failed, using mock:', error.message);
       // Fallback a mock data
       const { MOCK_PRODUCTS } = await import('./mockData');
       return { data: MOCK_PRODUCTS, total: MOCK_PRODUCTS.length };
@@ -265,23 +354,143 @@ class ApiService {
 
   async createProduct(productData) {
     try {
-      return await this.post('/products', productData);
-    } catch (error) {
-      // Mock creation
-      return { 
-        id: Date.now(), 
-        ...productData, 
-        createdAt: Date.now(),
-        updatedAt: Date.now()
+      // Obtener categorías para mapear nombre → ID
+      const categories = await this.getCategories();
+
+      // Verificar que categories sea un array antes de usar .find()
+      let category = Array.isArray(categories)
+        ? categories.find(c => c.name === productData.category)
+        : null;
+
+      // Si no existe la categoría, crearla automáticamente
+      if (!category) {
+        try {
+          const createdCategoryRaw = await this.createCategory({ name: productData.category });
+          category = createdCategoryRaw?.data || createdCategoryRaw;
+        } catch (err) {
+          throw new Error(`No se pudo crear la categoría "${productData.category}". ${err.message}`);
+        }
+      }
+
+      // Adaptar formato para el backend
+      const backendData = {
+        name: productData.name,
+        sku: productData.code, // El backend usa SKU
+        barcode: productData.barcode || productData.code,
+        price: parseFloat(productData.price),
+        cost: productData.cost ? parseFloat(productData.cost) : parseFloat(productData.price) * 0.6,
+        stock: parseInt(productData.stock),
+        minStock: productData.reorderPoint ? parseInt(productData.reorderPoint) : 10,
+        description: productData.description || '',
+        categoryId: category.id
       };
+
+      // Mapear supplier -> id: buscar por nombre y si no existe, crear y usar su id
+      const supplierName = (productData.supplier || '').trim();
+      if (supplierName) {
+        try {
+          const suppliersRaw = await this.getSuppliers({ search: supplierName, limit: 100 });
+          const suppliers = Array.isArray(suppliersRaw) ? suppliersRaw : (suppliersRaw.data || []);
+          let supplierObj = suppliers.find(s => (s.name || s.nombre || '').trim() === supplierName) || null;
+
+          if (!supplierObj) {
+            const createdRaw = await this.createSupplier({ name: supplierName });
+            const created = createdRaw?.data || createdRaw;
+            supplierObj = created || null;
+          }
+
+          if (supplierObj && supplierObj.id) {
+            backendData.supplierId = supplierObj.id;
+          }
+        } catch (err) {
+          // Si falla la búsqueda/creación del supplier, continuar sin él
+        }
+      }
+
+      // Enviar brand
+      if (productData.brand) backendData.brand = productData.brand;
+
+      const result = await this.post('/products', backendData);
+
+      // Adaptar respuesta de vuelta
+      // result may be { success, data }
+      const created = result?.data || result;
+      return {
+        ...created,
+        category: category?.name || productData.category,
+        supplier: productData.supplier || '',
+        brand: productData.brand || ''
+      };
+    } catch (error) {
+      console.error('Backend createProduct error:', error);
+      throw error; // Propagar el error en lugar de usar mock
     }
   }
 
   async updateProduct(id, productData) {
     try {
-      return await this.put(`/products/${id}`, productData);
+      // Obtener categorías para mapear nombre → ID
+      const categories = await this.getCategories();
+      let category = Array.isArray(categories)
+        ? categories.find(c => c.name === productData.category)
+        : null;
+
+      // Si no existe la categoría, crearla automáticamente
+      if (!category) {
+        try {
+          const createdCategoryRaw = await this.createCategory({ name: productData.category });
+          category = createdCategoryRaw?.data || createdCategoryRaw;
+        } catch (err) {
+          throw new Error(`No se pudo crear la categoría "${productData.category}". ${err.message}`);
+        }
+      }
+
+      // Construir payload con formato backend
+      const backendData = {
+        name: productData.name,
+        sku: productData.code,
+        barcode: productData.barcode || productData.code,
+        price: parseFloat(productData.price),
+        cost: productData.cost ? parseFloat(productData.cost) : parseFloat(productData.price) * 0.6,
+        stock: parseInt(productData.stock),
+        minStock: productData.reorderPoint ? parseInt(productData.reorderPoint) : 10,
+        description: productData.description || '',
+        categoryId: category.id
+      };
+
+      // Mapear supplier -> supplierId
+      const supplierName = (productData.supplier || '').trim();
+      if (supplierName) {
+        try {
+          const suppliersRaw = await this.getSuppliers({ search: supplierName, limit: 100 });
+          const suppliers = Array.isArray(suppliersRaw) ? suppliersRaw : (suppliersRaw.data || []);
+          let supplierObj = suppliers.find(s => (s.name || s.nombre || '').trim() === supplierName) || null;
+
+          if (!supplierObj) {
+            const createdRaw = await this.createSupplier({ name: supplierName });
+            const created = createdRaw?.data || createdRaw;
+            supplierObj = created || null;
+          }
+
+          if (supplierObj && supplierObj.id) {
+            backendData.supplierId = supplierObj.id;
+          }
+        } catch (err) {
+          // Si falla la búsqueda/creación del supplier, continuar sin él
+        }
+      } else {
+        // Si el campo está vacío, enviar null para eliminar el proveedor
+        backendData.supplierId = null;
+      }
+
+      // Enviar brand
+      if (productData.brand) backendData.brand = productData.brand;
+
+      console.log('[DEBUG] backendData a enviar:', backendData);
+      return await this.put(`/products/${id}`, backendData);
     } catch (error) {
-      return { id, ...productData, updatedAt: Date.now() };
+      console.error('Backend updateProduct error:', error);
+      throw error;
     }
   }
 
@@ -315,15 +524,46 @@ class ApiService {
 
   async createSale(saleData) {
     try {
-      return await this.post('/sales', saleData);
+      // Adaptar datos del frontend al formato del backend
+      const backendSaleData = {
+        customerId: saleData.customerId || null,
+        items: saleData.items.map(item => ({
+          productId: item.productId,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice
+        })),
+        subtotal: saleData.subtotal,
+        tax: saleData.tax || 0,
+        discount: saleData.discount || 0,
+        total: saleData.total,
+        paymentMethod: this.mapPaymentMethod(saleData.paymentMethod),
+        paymentStatus: 'PAID',
+        cashAmount: saleData.cashAmount || null,
+        changeAmount: saleData.changeAmount || null
+      };
+
+      const response = await this.post('/sales', backendSaleData);
+      return response;
     } catch (error) {
-      return { 
-        id: Date.now(), 
-        ...saleData, 
+      console.warn('Backend createSale failed, using mock:', error.message);
+      return {
+        id: Date.now(),
+        ...saleData,
         status: 'completed',
         createdAt: Date.now()
       };
     }
+  }
+
+  // Helper para mapear métodos de pago del frontend al backend
+  mapPaymentMethod(method) {
+    const methodMap = {
+      'efectivo': 'CASH',
+      'tarjeta_credito': 'CREDIT_CARD',
+      'tarjeta_debito': 'DEBIT_CARD',
+      'transferencia': 'TRANSFER'
+    };
+    return methodMap[method] || 'CASH';
   }
 
   async getSaleById(id) {
@@ -395,9 +635,9 @@ class ApiService {
   /**
    * Dashboard y reportes
    */
-  async getDashboardData(dateRange = {}) {
+  async getDashboardData(period = 'month') {
     try {
-      return await this.get('/dashboard', dateRange);
+      return await this.get('/reports/dashboard', { period });
     } catch (error) {
       const { generateSalesChartData, generateCategoryData, generateHourlyData } = await import('./mockData');
       return {
@@ -418,11 +658,118 @@ class ApiService {
     try {
       return await this.get(`/reports/${type}`, filters);
     } catch (error) {
-      return { 
-        type, 
-        data: [], 
+      return {
+        type,
+        data: [],
         generatedAt: Date.now(),
-        filters 
+        filters
+      };
+    }
+  }
+
+  async getSalesReport(period = 'month', startDate = null, endDate = null) {
+    try {
+      const params = { period };
+      if (startDate) params.startDate = startDate;
+      if (endDate) params.endDate = endDate;
+      return await this.get('/reports/sales', params);
+    } catch (error) {
+      console.warn('Backend getSalesReport failed, using mock:', error.message);
+      return {
+        summary: {
+          totalSales: 0,
+          totalTransactions: 0,
+          averageTicket: 0,
+          totalItems: 0,
+          period
+        }
+      };
+    }
+  }
+
+  async getProductsReport(period = 'month') {
+    try {
+      return await this.get('/reports/products', { period });
+    } catch (error) {
+      console.warn('Backend getProductsReport failed, using mock:', error.message);
+      const { generateCategoryData } = await import('./mockData');
+      return {
+        topProducts: [],
+        period
+      };
+    }
+  }
+
+  async getCustomersReport() {
+    try {
+      return await this.get('/reports/customers');
+    } catch (error) {
+      console.warn('Backend getCustomersReport failed, using mock:', error.message);
+      return {
+        summary: {
+          totalCustomers: 0,
+          activeCustomers: 0,
+          inactiveCustomers: 0
+        }
+      };
+    }
+  }
+
+  async getInventoryReport() {
+    try {
+      const response = await this.get('/reports/inventory');
+      // Extraer los datos si la respuesta tiene estructura { success, data }
+      return response.data || response;
+    } catch (error) {
+      console.warn('Backend getInventoryReport failed, using mock:', error.message);
+      // Generar mock data realista con productos activos
+      const mockProducts = [
+        { id: 1, name: 'Neumático Michelin 185/65R15', sku: 'NEU-MICH-001', stock: 25, minStock: 5 },
+        { id: 2, name: 'Batería BOSCH S4 12V 60Ah', sku: 'BAT-BOSCH-001', stock: 8, minStock: 3 },
+        { id: 3, name: 'Aceite Castrol Edge 5W30', sku: 'ACE-CAST-001', stock: 45, minStock: 10 },
+        { id: 4, name: 'Filtro de Aire K&N', sku: 'FIL-AIR-001', stock: 2, minStock: 10 },
+        { id: 5, name: 'Cadena 520 DID', sku: 'CAD-520-001', stock: 5, minStock: 8 },
+        { id: 6, name: 'Pastillas de Freno Brembo', sku: 'PAS-BREM-001', stock: 18, minStock: 5 },
+        { id: 7, name: 'Correas de Transmisión', sku: 'COR-TRANS-001', stock: 12, minStock: 4 },
+        { id: 8, name: 'Amortiguadores Monroe', sku: 'AMO-MUNR-001', stock: 6, minStock: 3 },
+        { id: 9, name: 'Bujías NGK Iridium', sku: 'BUJ-NGK-001', stock: 35, minStock: 8 },
+        { id: 10, name: 'Sensores Bosch', sku: 'SEN-BOSCH-001', stock: 9, minStock: 4 }
+      ];
+
+      const lowStockItems = mockProducts.filter(p => p.stock <= p.minStock);
+
+      return {
+        summary: {
+          totalProducts: mockProducts.length,
+          lowStockCount: lowStockItems.length
+        },
+        lowStockItems: lowStockItems
+      };
+    }
+  }
+
+  async getFinancialReport(period = 'month') {
+    try {
+      return await this.get('/reports/financial', { period });
+    } catch (error) {
+      return {
+        type: 'financial',
+        data: [],
+        generatedAt: Date.now(),
+        period
+      };
+    }
+  }
+
+  async getSalesAnalytics(period = 'month') {
+    try {
+      return await this.get('/reports/sales-analytics', { period });
+    } catch (error) {
+      return {
+        type: 'sales-analytics',
+        data: [],
+        generatedAt: Date.now(),
+        period
       };
     }
   }
@@ -432,7 +779,7 @@ class ApiService {
    */
   async getSystemConfiguration() {
     try {
-      return await this.get('/system/config');
+      return await this.get('/settings');
     } catch (error) {
       return {
         language: 'es',
@@ -449,11 +796,119 @@ class ApiService {
 
   async updateSystemConfiguration(config) {
     try {
-      return await this.put('/system/config', config);
+      return await this.put('/settings', config);
     } catch (error) {
       // Simular guardado local
       await new Promise(resolve => setTimeout(resolve, 500));
       return { success: true };
+    }
+  }
+
+  async getStoreSettings() {
+    try {
+      return await this.get('/settings/store');
+    } catch (error) {
+      return {
+        name: 'POS AI Restaurant',
+        address: 'Av. Reforma 123, Col. Centro, CDMX',
+        phone: '+52 55 1234 5678',
+        email: 'contacto@pos-ai.com'
+      };
+    }
+  }
+
+  async updateStoreSettings(settings) {
+    try {
+      return await this.put('/settings/store', settings);
+    } catch (error) {
+      return { success: true };
+    }
+  }
+
+  /**
+   * Gestión de Clientes
+   */
+  async getCustomers(filters = {}) {
+    try {
+      return await this.get('/customers', filters);
+    } catch (error) {
+      return { data: [], total: 0 };
+    }
+  }
+
+  async getCustomer(id) {
+    try {
+      return await this.get(`/customers/${id}`);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async createCustomer(customerData) {
+    try {
+      return await this.post('/customers', customerData);
+    } catch (error) {
+      return {
+        id: Date.now(),
+        ...customerData,
+        createdAt: Date.now()
+      };
+    }
+  }
+
+  async updateCustomer(id, customerData) {
+    try {
+      return await this.put(`/customers/${id}`, customerData);
+    } catch (error) {
+      return { id, ...customerData, updatedAt: Date.now() };
+    }
+  }
+
+  async deleteCustomer(id) {
+    try {
+      return await this.delete(`/customers/${id}`);
+    } catch (error) {
+      return { success: true };
+    }
+  }
+
+  /**
+   * Gestión de Categorías
+   */
+  // ...categories management handled by single getCategories implementation above
+
+  async createCategory(categoryData) {
+    try {
+      return await this.post('/categories', categoryData);
+    } catch (error) {
+      return {
+        id: Date.now(),
+        ...categoryData,
+        createdAt: Date.now()
+      };
+    }
+  }
+
+  /**
+   * Gestión de Proveedores
+   */
+  async getSuppliers(filters = {}) {
+    try {
+      return await this.get('/suppliers', filters);
+    } catch (error) {
+      return { data: [], total: 0 };
+    }
+  }
+
+  async createSupplier(supplierData) {
+    try {
+      return await this.post('/suppliers', supplierData);
+    } catch (error) {
+      return {
+        id: Date.now(),
+        ...supplierData,
+        createdAt: Date.now()
+      };
     }
   }
 
@@ -483,6 +938,53 @@ class ApiService {
           }
         ]
       };
+    }
+  }
+
+  /**
+   * Gestión de Usuarios
+   */
+  async getUsers(filters = {}) {
+    try {
+      return await this.get('/users', filters);
+    } catch (error) {
+      return { data: [], total: 0 };
+    }
+  }
+
+  async getUser(id) {
+    try {
+      return await this.get(`/users/${id}`);
+    } catch (error) {
+      return null;
+    }
+  }
+
+  async createUser(userData) {
+    try {
+      return await this.post('/users', userData);
+    } catch (error) {
+      return {
+        id: Date.now(),
+        ...userData,
+        createdAt: Date.now()
+      };
+    }
+  }
+
+  async updateUser(id, userData) {
+    try {
+      return await this.put(`/users/${id}`, userData);
+    } catch (error) {
+      return { id, ...userData, updatedAt: Date.now() };
+    }
+  }
+
+  async deleteUser(id) {
+    try {
+      return await this.delete(`/users/${id}`);
+    } catch (error) {
+      return { success: true };
     }
   }
 

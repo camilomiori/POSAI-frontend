@@ -351,7 +351,7 @@ class CashRegisterService {
   getTodayMetrics() {
     const session = this.getCurrentSession();
     const movements = this.getTodayMovements();
-    
+
     const salesMovements = movements.filter(m => m.type === 'sale');
     const withdrawals = movements.filter(m => m.type === 'withdrawal' || m.type === 'expense');
     const deposits = movements.filter(m => m.type === 'deposit');
@@ -359,6 +359,15 @@ class CashRegisterService {
     const totalSales = salesMovements.reduce((sum, m) => sum + (m.amount || 0), 0);
     const totalWithdrawals = Math.abs(withdrawals.reduce((sum, m) => sum + (m.amount || 0), 0));
     const totalDeposits = deposits.reduce((sum, m) => sum + (m.amount || 0), 0);
+
+    // Calcular la hora de la primera venta del día (si existe)
+    let openTime = null;
+    if (salesMovements.length > 0) {
+      const sortedSales = salesMovements.sort((a, b) => a.timestamp - b.timestamp);
+      openTime = sortedSales[0].timestamp;
+    } else if (session?.openedAt) {
+      openTime = new Date(session.openedAt).getTime();
+    }
 
     return {
       isOpen: this.isOpen(),
@@ -373,7 +382,8 @@ class CashRegisterService {
       formattedCurrentAmount: formatARS(session?.currentAmount || 0),
       formattedExpectedAmount: formatARS(session?.expectedAmount || 0),
       formattedTotalSales: formatARS(totalSales),
-      payments: session?.payments || { cash: 0, card: 0, transfer: 0, other: 0 }
+      payments: session?.payments || { cash: 0, card: 0, transfer: 0, other: 0 },
+      openTime: openTime
     };
   }
 

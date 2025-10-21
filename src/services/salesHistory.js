@@ -1,6 +1,7 @@
 // services/salesHistory.js
 import { STORAGE_KEYS } from '../utils/constants';
 import { formatDateTime, formatARS } from '../utils/formatters';
+import { MOCK_SALES } from './mockData';
 
 /**
  * Servicio para manejar el historial de ventas en localStorage
@@ -16,10 +17,24 @@ class SalesHistoryService {
   getAllSales() {
     try {
       const sales = localStorage.getItem(this.storageKey);
-      return sales ? JSON.parse(sales) : [];
+      if (sales) {
+        return JSON.parse(sales);
+      }
+      // Devolver mock sales cuando localStorage está vacío (desarrollo/fallback)
+      return MOCK_SALES.map(sale => ({
+        ...sale,
+        date: sale.date || new Date(sale.timestamp).toISOString(),
+        formattedDate: formatDateTime(new Date(sale.timestamp)),
+        formattedTotal: formatARS(sale.total)
+      }));
     } catch (error) {
       console.error('Error loading sales history:', error);
-      return [];
+      return MOCK_SALES.map(sale => ({
+        ...sale,
+        date: sale.date || new Date(sale.timestamp).toISOString(),
+        formattedDate: formatDateTime(new Date(sale.timestamp)),
+        formattedTotal: formatARS(sale.total)
+      }));
     }
   }
 
