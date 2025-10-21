@@ -49,73 +49,110 @@ import { TicketPreview, CashRegisterModal } from '../components/common';
 import { formatARS, formatDateTime, formatPrice } from '../utils/formatters';
 import { PAYMENT_METHODS, INVOICE_TYPES, PRODUCT_CATEGORIES } from '../utils/constants';
 
-// Datos de productos de ejemplo para autopartes
+// Datos de productos de ejemplo - Sincronizados con la base de datos
 const SAMPLE_PRODUCTS = [
+  // Bebidas
   {
     id: 1,
-    name: 'Filtro de Aceite',
-    category: 'filtros',
-    price: 15000,
-    stock: 25,
-    code: 'FIL001',
-    brand: 'Fram'
+    name: 'Coca Cola 500ml',
+    category: 'Bebidas',
+    price: 350,
+    stock: 100,
+    code: 'BEB-001',
+    brand: 'Coca Cola'
   },
   {
     id: 2,
-    name: 'Pastillas de Freno',
-    category: 'frenos',
-    price: 28000,
-    stock: 12,
-    code: 'FRE002',
-    brand: 'Fras-le'
+    name: 'Agua Mineral 1.5L',
+    category: 'Bebidas',
+    price: 250,
+    stock: 150,
+    code: 'BEB-002',
+    brand: 'Agua Mineral'
   },
   {
     id: 3,
-    name: 'Batería 12V 75Ah',
-    category: 'electricidad',
-    price: 85000,
-    stock: 8,
-    code: 'BAT003',
-    brand: 'Moura'
+    name: 'Sprite 500ml',
+    category: 'Bebidas',
+    price: 340,
+    stock: 80,
+    code: 'BEB-003',
+    brand: 'Sprite'
   },
+  // Alimentos
   {
     id: 4,
-    name: 'Neumático 185/65 R15',
-    category: 'neumaticos',
-    price: 120000,
-    stock: 16,
-    code: 'NEU004',
-    brand: 'Pirelli'
+    name: 'Pan Lactal',
+    category: 'Alimentos',
+    price: 890,
+    stock: 50,
+    code: 'ALI-001',
+    brand: 'Bimbo'
   },
   {
     id: 5,
-    name: 'Kit de Embrague',
-    category: 'transmision',
-    price: 95000,
-    stock: 6,
-    code: 'EMB005',
-    brand: 'LuK'
+    name: 'Leche Entera 1L',
+    category: 'Alimentos',
+    price: 650,
+    stock: 60,
+    code: 'ALI-002',
+    brand: 'Sancor'
   },
   {
     id: 6,
-    name: 'Amortiguador Delantero',
-    category: 'suspension',
-    price: 45000,
-    stock: 10,
-    code: 'AMO006',
-    brand: 'Monroe'
+    name: 'Arroz 1kg',
+    category: 'Alimentos',
+    price: 980,
+    stock: 40,
+    code: 'ALI-003',
+    brand: 'Arroz'
+  },
+  // Limpieza
+  {
+    id: 7,
+    name: 'Detergente 750ml',
+    category: 'Limpieza',
+    price: 1200,
+    stock: 30,
+    code: 'LIM-001',
+    brand: 'Ariel'
+  },
+  {
+    id: 8,
+    name: 'Lavandina 1L',
+    category: 'Limpieza',
+    price: 780,
+    stock: 35,
+    code: 'LIM-002',
+    brand: 'Lavandina'
+  },
+  // Electrónica
+  {
+    id: 9,
+    name: 'Auriculares Bluetooth',
+    category: 'Electrónica',
+    price: 15000,
+    stock: 15,
+    code: 'ELE-001',
+    brand: 'Genérico'
+  },
+  {
+    id: 10,
+    name: 'Cable USB-C 1m',
+    category: 'Electrónica',
+    price: 2500,
+    stock: 25,
+    code: 'ELE-002',
+    brand: 'Genérico'
   }
 ];
 
 const CATEGORIES = [
   { value: 'all', label: 'Todas las categorías' },
-  { value: 'filtros', label: 'Filtros' },
-  { value: 'frenos', label: 'Frenos' },
-  { value: 'electricidad', label: 'Electricidad' },
-  { value: 'neumaticos', label: 'Neumáticos' },
-  { value: 'transmision', label: 'Transmisión' },
-  { value: 'suspension', label: 'Suspensión' },
-  { value: 'encendido', label: 'Encendido' }
+  { value: 'Bebidas', label: 'Bebidas' },
+  { value: 'Alimentos', label: 'Alimentos' },
+  { value: 'Limpieza', label: 'Limpieza' },
+  { value: 'Electrónica', label: 'Electrónica' }
 ];
 
 const VentasFacturacion = () => {
